@@ -527,7 +527,7 @@ if(LINTER)
     message(STATUS "Linter support (clang-tidy) enabled")
     if(LINTER_STRICT)
       set(CMAKE_C_CLANG_TIDY
-          "${CLANG_TIDY};--checks=cppcoreguidelines-init-variables,clang-diagnostic-*,clang-analyzer-*,-*,clang-analyzer-core.*,clang-diagnostic-*;--warnings-as-errors=*"
+          "${CLANG_TIDY};--checks=clang-diagnostic-*,clang-analyzer-*,-*,clang-analyzer-core.*,clang-diagnostic-*,readability-redundant-control-flow,bugprone-argument-comment,bugprone-macro-parentheses;--warnings-as-errors=*"
       )
     else()
       set(CMAKE_C_CLANG_TIDY "${CLANG_TIDY};--quiet")
