@@ -866,12 +866,17 @@ hypertable_insert_relation(Relation rel, FormData_hypertable *fd)
 }
 
 static void
-hypertable_insert(int32 hypertable_id, Name schema_name, Name table_name,
-				  Name associated_schema_name, Name associated_table_prefix,
-				  Name chunk_sizing_func_schema, Name chunk_sizing_func_name,
-				  int64 chunk_target_size, int16 num_dimensions, bool compressed,
-				  int16 replication_factor)
-{
+hypertable_insert(int32 hypertable_id,
+                  Name schema_name,
+                  Name table_name,
+				  Name associated_schema_name,
+                  Name associated_table_prefix,
+				  Name chunk_sizing_func_schema,
+                  Name chunk_sizing_func_name,
+				  int64 chunk_target_size,
+                  int16 num_dimensions,
+                  bool compressed,
+				  int16 replication_factor) {
 	Catalog *catalog = ts_catalog_get();
 	Relation rel;
 	FormData_hypertable fd;
@@ -1714,27 +1719,25 @@ TS_FUNCTION_INFO_V1(ts_hypertable_distributed_create);
 /*
  * Create a hypertable from an existing table.
  *
- * Arguments:
- * relation              REGCLASS
- * time_column_name        NAME
- * partitioning_column     NAME = NULL
- * number_partitions       INTEGER = NULL
- * associated_schema_name  NAME = NULL
- * associated_table_prefix NAME = NULL
- * chunk_time_interval     anyelement = NULL::BIGINT
- * create_default_indexes  BOOLEAN = TRUE
- * if_not_exists           BOOLEAN = FALSE
- * partitioning_func       REGPROC = NULL
- * migrate_data            BOOLEAN = FALSE
- * chunk_target_size       TEXT = NULL
- * chunk_sizing_func       OID = NULL
- * time_partitioning_func  REGPROC = NULL
- * replication_factor      INTEGER = NULL
- * data nodes              NAME[] = NULL
+ * Argument
+ * 0 relation              REGCLASS
+ * 1 time_column_name        NAME
+ * 2 partitioning_column     NAME = NULL
+ * 3 number_partitions       INTEGER = NULL
+ * 4 associated_schema_name  NAME = NULL
+ * 5 associated_table_prefix NAME = NULL
+ * 6 chunk_time_interval     anyelement = NULL::BIGINT
+ * 7 create_default_indexes  BOOLEAN = TRUE
+ * 8 if_not_exists           BOOLEAN = FALSE
+ * 9 partitioning_func       REGPROC = NULL
+ * 10 migrate_data            BOOLEAN = FALSE
+ * 11 chunk_target_size       TEXT = NULL
+ * 12 chunk_sizing_func       OID = NULL
+ * 13 time_partitioning_func  REGPROC = NULL
+ * 14 replication_factor      INTEGER = NULL
+ * 15 data nodes              NAME[] = NULL
  */
-static Datum
-ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool is_dist_call)
-{
+static Datum ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool is_dist_call) {
 	Oid table_relid = PG_ARGISNULL(0) ? InvalidOid : PG_GETARG_OID(0);
 	Name time_dim_name = PG_ARGISNULL(1) ? NULL : PG_GETARG_NAME(1);
 	Name space_dim_name = PG_ARGISNULL(2) ? NULL : PG_GETARG_NAME(2);
@@ -1760,6 +1763,7 @@ ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool is_dist_call)
 	int32 replication_factor_in = replication_factor_is_null ? 0 : PG_GETARG_INT32(14);
 	int16 replication_factor;
 	ArrayType *data_node_arr = PG_ARGISNULL(15) ? NULL : PG_GETARG_ARRAYTYPE_P(15);
+
 	ChunkSizingInfo chunk_sizing_info = {
 		.table_relid = table_relid,
 		.target_size = PG_ARGISNULL(11) ? NULL : PG_GETARG_TEXT_P(11),
@@ -1767,9 +1771,10 @@ ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool is_dist_call)
 		.colname = PG_ARGISNULL(1) ? NULL : PG_GETARG_CSTRING(1),
 		.check_for_index = !create_default_indexes,
 	};
+
 	Cache *hcache;
-	Hypertable *ht;
-	Datum retval;
+	Hypertable *hypertable;
+	Datum result;
 	bool created;
 	uint32 flags = 0;
 	List *data_nodes = NIL;
@@ -1795,9 +1800,9 @@ ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool is_dist_call)
 				 errmsg("invalid data nodes format"),
 				 errhint("Specify a one-dimensional array of data nodes.")));
 
-	ht = ts_hypertable_cache_get_cache_and_entry(table_relid, CACHE_FLAG_MISSING_OK, &hcache);
-	if (ht)
-	{
+    hypertable = ts_hypertable_cache_get_cache_and_entry(table_relid, CACHE_FLAG_MISSING_OK, &hcache);
+
+	if (hypertable) {
 		if (if_not_exists)
 			ereport(NOTICE,
 					(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
@@ -1808,9 +1813,7 @@ ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool is_dist_call)
 					(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
 					 errmsg("table \"%s\" is already a hypertable", get_rel_name(table_relid))));
 		created = false;
-	}
-	else
-	{
+	} else {
 		/* Release previously pinned cache */
 		ts_cache_release(hcache);
 
@@ -1870,15 +1873,16 @@ ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool is_dist_call)
 												 data_nodes);
 
 		Assert(created);
-		ht = ts_hypertable_cache_get_cache_and_entry(table_relid, CACHE_FLAG_NONE, &hcache);
+        hypertable = ts_hypertable_cache_get_cache_and_entry(table_relid, CACHE_FLAG_NONE, &hcache);
 		if (NULL != space_dim_info)
-			ts_hypertable_check_partitioning(ht, space_dim_info->dimension_id);
+			ts_hypertable_check_partitioning(hypertable, space_dim_info->dimension_id);
 	}
 
-	retval = create_hypertable_datum(fcinfo, ht, created);
+    result = create_hypertable_datum(fcinfo, hypertable, created);
+
 	ts_cache_release(hcache);
 
-	PG_RETURN_DATUM(retval);
+	PG_RETURN_DATUM(result);
 }
 
 Datum
@@ -1900,13 +1904,16 @@ ts_hypertable_distributed_create(PG_FUNCTION_ARGS)
  * returns 'true' if new hypertable was created, false if 'if_not_exists' and the hypertable already
  * exists.
  */
-bool
-ts_hypertable_create_from_info(Oid table_relid, int32 hypertable_id, uint32 flags,
-							   DimensionInfo *time_dim_info, DimensionInfo *space_dim_info,
-							   Name associated_schema_name, Name associated_table_prefix,
-							   ChunkSizingInfo *chunk_sizing_info, int16 replication_factor,
-							   List *data_node_names)
-{
+bool ts_hypertable_create_from_info(Oid table_relid,
+                                    int32 hypertable_id,
+                                    uint32 flags,
+                                    DimensionInfo *time_dim_info,
+                                    DimensionInfo *space_dim_info,
+                                    Name associated_schema_name,
+                                    Name associated_table_prefix,
+                                    ChunkSizingInfo *chunk_sizing_info,
+                                    int16 replication_factor,
+                                    List *data_node_names) {
 	Cache *hcache;
 	Hypertable *ht;
 	Oid associated_schema_oid;
