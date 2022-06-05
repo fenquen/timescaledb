@@ -287,9 +287,7 @@ typedef struct
  *
  * 4. Constifying now() expressions for primary time dimension.
  */
-static bool
-preprocess_query(Node *node, PreprocessQueryContext *context)
-{
+static bool preprocess_query(Node *node, PreprocessQueryContext *context) {
 	if (node == NULL)
 		return false;
 
@@ -301,10 +299,7 @@ preprocess_query(Node *node, PreprocessQueryContext *context)
 			from->quals =
 				ts_constify_now(context->root, context->current_query->rtable, from->quals);
 		}
-	}
-
-	else if (IsA(node, Query))
-	{
+	} else if (IsA(node, Query)) {
 		Query *query = castNode(Query, node);
 		Query *prev_query;
 		Cache *hcache = planner_hcache_get();
@@ -390,10 +385,11 @@ preprocess_query(Node *node, PreprocessQueryContext *context)
 
 static PlannedStmt *
 #if PG13_GE
-timescaledb_planner(Query *parse, const char *query_string, int cursor_opts,
-					ParamListInfo bound_params)
+timescaledb_planner(Query *parse, const char *query_string, int cursor_opts,ParamListInfo bound_params)
 #else
-timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
+timescaledb_planner(Query *parse,
+					int cursor_opts,
+					ParamListInfo bound_params)
 #endif
 {
 	PlannedStmt *stmt;
@@ -406,20 +402,22 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 	 * While this state will not happen during normal operation it
 	 * can happen when executing plpgsql procedures.
 	 */
-	if (IsAbortedTransactionBlockState())
+	if (IsAbortedTransactionBlockState()) {
 		ereport(ERROR,
 				(errcode(ERRCODE_IN_FAILED_SQL_TRANSACTION),
-				 errmsg("current transaction is aborted, "
-						"commands ignored until end of transaction block")));
+				 errmsg("current transaction is aborted,commands ignored until end of transaction block")));
+	}
 
 	planner_hcache_push();
 
 	PG_TRY();
 	{
 		PreprocessQueryContext context = { 0 };
+
 		PlannerGlobal glob = {
 			.boundParams = bound_params,
 		};
+
 		PlannerInfo root = {
 			.glob = &glob,
 		};
@@ -428,11 +426,8 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 		context.rootquery = parse;
 		context.current_query = parse;
 
-		if (ts_extension_is_loaded())
-		{
-			/*
-			 * Preprocess the hypertables in the query and warm up the caches.
-			 */
+		if (ts_extension_is_loaded()) {
+			// Preprocess the hyper tables in the query and warm up the caches.
 			preprocess_query((Node *) parse, &context);
 
 			/*
@@ -457,29 +452,21 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 			 * only set/reset the fetcher type at the topmost level, that's why
 			 * we check it's not already set.
 			 */
-			if (ts_data_node_fetcher_scan_type == AutoFetcherType)
-			{
+			if (ts_data_node_fetcher_scan_type == AutoFetcherType) {
 				reset_fetcher_type = true;
 
-				if (ts_guc_remote_data_fetcher == AutoFetcherType)
-				{
-					if (context.num_distributed_tables >= 2)
-					{
+				if (ts_guc_remote_data_fetcher == AutoFetcherType) {
+					if (context.num_distributed_tables >= 2) {
 						ts_data_node_fetcher_scan_type = CursorFetcherType;
-					}
-					else
-					{
+					} else {
 						ts_data_node_fetcher_scan_type = RowByRowFetcherType;
 					}
-				}
-				else
-				{
+				} else {
 					ts_data_node_fetcher_scan_type = ts_guc_remote_data_fetcher;
 				}
 			}
 
-			if (ts_baserel_info == NULL)
-			{
+			if (ts_baserel_info == NULL) {
 				/*
 				 * The calls to timescaledb_planner can be recursive (e.g. when
 				 * evaluating an immutable SQL function at planning time). We
@@ -501,23 +488,22 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 			}
 		}
 
-		if (prev_planner_hook != NULL)
-		/* Call any earlier hooks */
+		if (prev_planner_hook != NULL) {// call any earlier hooks
 #if PG13_GE
-			stmt = (prev_planner_hook)(parse, query_string, cursor_opts, bound_params);
+			stmt = (prev_planner_hook) (parse, query_string, cursor_opts, bound_params);
 #else
-			stmt = (prev_planner_hook)(parse, cursor_opts, bound_params);
+			stmt = (prev_planner_hook) (parse, cursor_opts, bound_params);
 #endif
-		else
-		/* Call the standard planner */
+		}
+		else { // call the standard planner
 #if PG13_GE
 			stmt = standard_planner(parse, query_string, cursor_opts, bound_params);
 #else
 			stmt = standard_planner(parse, cursor_opts, bound_params);
 #endif
+		}
 
-		if (ts_extension_is_loaded())
-		{
+		if (ts_extension_is_loaded()) {
 			/*
 			 * Our top-level HypertableInsert plan node that wraps ModifyTable needs
 			 * to have a final target list that is the same as the ModifyTable plan
@@ -528,21 +514,19 @@ timescaledb_planner(Query *parse, int cursor_opts, ParamListInfo bound_params)
 			 */
 			ts_hypertable_modify_fixup_tlist(stmt->planTree);
 
-			foreach (lc, stmt->subplans)
-			{
+			foreach (lc, stmt->subplans) {
 				Plan *subplan = (Plan *) lfirst(lc);
 
-				if (subplan)
+				if (subplan) {
 					ts_hypertable_modify_fixup_tlist(subplan);
+				}
 			}
 
-			if (reset_fetcher_type)
-			{
+			if (reset_fetcher_type) {
 				ts_data_node_fetcher_scan_type = AutoFetcherType;
 			}
 
-			if (reset_baserel_info)
-			{
+			if (reset_baserel_info) {
 				BaserelInfo_destroy(ts_baserel_info);
 				ts_baserel_info = NULL;
 			}
@@ -1553,6 +1537,7 @@ _planner_init(void)
 {
 	prev_planner_hook = planner_hook;
 	planner_hook = timescaledb_planner;
+
 	prev_set_rel_pathlist_hook = set_rel_pathlist_hook;
 	set_rel_pathlist_hook = timescaledb_set_rel_pathlist;
 

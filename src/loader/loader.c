@@ -522,21 +522,21 @@ check_uuid(const char *label)
 	PG_END_TRY();
 }
 
-static void
-loader_process_utility_hook(PlannedStmt *pstmt, const char *query_string,
+static void loader_process_utility_hook(PlannedStmt *pstmt,
+							const char *query_string,
 #if PG14_GE
 							bool readonly_tree,
 #endif
-							ProcessUtilityContext context, ParamListInfo params,
-							QueryEnvironment *queryEnv, DestReceiver *dest,
+							ProcessUtilityContext context,
+							ParamListInfo params,
+							QueryEnvironment *queryEnv,
+							DestReceiver *dest,
 #if PG13_GE
 							QueryCompletion *completion_tag
 #else
 							char *completion_tag
 #endif
-
-)
-{
+							){
 	bool is_distributed_database = false;
 	char *dist_uuid = NULL;
 	ProcessUtility_hook_type process_utility;

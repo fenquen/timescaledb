@@ -276,9 +276,7 @@ ts_extension_invalidate(void)
 	extension_proxy_oid = InvalidOid;
 }
 
-bool
-ts_extension_is_loaded(void)
-{
+bool ts_extension_is_loaded(void) {
 	/* When restoring deactivate extension.
 	 *
 	 * We are using IsBinaryUpgrade (and ts_guc_restoring).  If a user set
@@ -296,8 +294,7 @@ ts_extension_is_loaded(void)
 		extension_update_state();
 	}
 
-	switch (extstate)
-	{
+	switch (extstate) {
 		case EXTENSION_STATE_CREATED:
 			Assert(OidIsValid(ts_extension_oid));
 			Assert(OidIsValid(extension_proxy_oid));
@@ -311,8 +308,7 @@ ts_extension_is_loaded(void)
 			 * that, for example, the catalog does not go looking for things
 			 * that aren't yet there.
 			 */
-			if (extstate == EXTENSION_STATE_TRANSITIONING)
-			{
+			if (extstate == EXTENSION_STATE_TRANSITIONING) {
 				/* when we are updating the extension, we execute
 				 * scripts in post_update.sql after setting up the
 				 * the dependencies. At this stage, TS
@@ -326,6 +322,7 @@ ts_extension_is_loaded(void)
 					(strlen(POST_UPDATE) == strlen(update_script_stage)))
 					return true;
 			}
+
 			return false;
 		default:
 			elog(ERROR, "unknown state: %d", extstate);

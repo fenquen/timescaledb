@@ -88,9 +88,7 @@ cleanup_on_pg_proc_exit(int code, Datum arg)
 	_cache_fini();
 }
 
-void
-_PG_init(void)
-{
+void _PG_init(void) {
 	/*
 	 * Check extension_is loaded to catch certain errors such as calls to
 	 * functions defined on the wrong extension version

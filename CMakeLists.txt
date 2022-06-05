@@ -10,7 +10,7 @@ include(CMakeDependentOption)
 # This requires all tests to run. This defaults to OFF but can be enabled to
 # ensure that no tests are skipped because of missing tools.
 option(REQUIRE_ALL_TESTS "Require all tests to run." OFF)
-option(USE_OPENSSL "Enable use of OpenSSL if available" ON)
+#option(USE_OPENSSL "Enable use of OpenSSL if available" OFF)
 option(SEND_TELEMETRY_DEFAULT "The default value for whether to send telemetry"
        ON)
 option(
@@ -283,7 +283,7 @@ if(WIN32)
 elseif(UNIX)
   find_path(
     PG_PATH postgres
-    PATHS $ENV{HOME} /opt/local/pgsql /usr/local/pgsql /usr/lib/postgresql
+    PATHS /Users/a/program/pg12 /home/a/program/pg12 $ENV{HOME} /opt/local/pgsql /usr/local/pgsql /usr/lib/postgresql
     PATH_SUFFIXES bin 12/bin 13/bin
     DOC "The path to a PostgreSQL installation")
 endif()
@@ -576,41 +576,41 @@ execute_process(
 string(REGEX MATCH "--with-(ssl=)?openssl" PG_USE_OPENSSL
              "${PG_CONFIGURE_FLAGS}")
 
-if(USE_OPENSSL AND (NOT PG_USE_OPENSSL))
-  message(
-    FATAL_ERROR
-      "PostgreSQL was built without OpenSSL support, which TimescaleDB needs for full compatibility. Please rebuild PostgreSQL using `--with-openssl` or if you want to continue without OpenSSL, re-run bootstrap with `-DUSE_OPENSSL=0`"
-  )
-endif(USE_OPENSSL AND (NOT PG_USE_OPENSSL))
+#if(USE_OPENSSL AND (NOT PG_USE_OPENSSL))
+#  message(
+ #   FATAL_ERROR
+ #     "PostgreSQL was built without OpenSSL support, which TimescaleDB needs for full compatibility. Please rebuild PostgreSQL using `--with-openssl` or if you want to continue without OpenSSL, re-run bootstrap with `-DUSE_OPENSSL=0`"
+  #)
+#endif(USE_OPENSSL AND (NOT PG_USE_OPENSSL))
 
-if(USE_OPENSSL)
+#if(USE_OPENSSL)
   # Try to find a local OpenSSL installation
-  find_package(OpenSSL)
+ # find_package(OpenSSL)
 
-  if(NOT OPENSSL_FOUND)
-    message(
-      FATAL_ERROR
-        "TimescaleDB requires OpenSSL but it wasn't found. If you want to continue without OpenSSL, re-run bootstrap with `-DUSE_OPENSSL=0`"
-    )
-  endif(NOT OPENSSL_FOUND)
+ # if(NOT OPENSSL_FOUND)
+  #  message(
+   #   FATAL_ERROR
+   #     "TimescaleDB requires OpenSSL but it wasn't found. If you want to continue without OpenSSL, re-run bootstrap with `-DUSE_OPENSSL=0`"
+   # )
+ # endif(NOT OPENSSL_FOUND)
 
-  if(${OPENSSL_VERSION} VERSION_LESS "1.0")
-    message(FATAL_ERROR "TimescaleDB requires OpenSSL version 1.0 or greater")
-  endif()
+  #if(${OPENSSL_VERSION} VERSION_LESS "1.0")
+  #  message(FATAL_ERROR "TimescaleDB requires OpenSSL version 1.0 or greater")
+ # endif()
 
-  if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND MSVC)
-    set(_libraries)
-    foreach(_path ${OPENSSL_LIBRARIES})
-      get_filename_component(_dir ${_path} DIRECTORY)
-      get_filename_component(_name ${_path} NAME_WE)
-      string(REGEX REPLACE "[Dd]$" "" _fixed ${_name})
-      get_filename_component(_ext ${_path} EXT)
-      list(APPEND _libraries "${_dir}/${_fixed}${_ext}")
-    endforeach()
-    set(OPENSSL_LIBRARIES ${_libraries})
-  endif()
-  message(STATUS "Using OpenSSL version ${OPENSSL_VERSION}")
-endif(USE_OPENSSL)
+ # if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND MSVC)
+  #  set(_libraries)
+ #   foreach(_path ${OPENSSL_LIBRARIES})
+  #    get_filename_component(_dir ${_path} DIRECTORY)
+  #    get_filename_component(_name ${_path} NAME_WE)
+  #    string(REGEX REPLACE "[Dd]$" "" _fixed ${_name})
+  #    get_filename_component(_ext ${_path} EXT)
+ #     list(APPEND _libraries "${_dir}/${_fixed}${_ext}")
+ #   endforeach()
+ #   set(OPENSSL_LIBRARIES ${_libraries})
+ # endif()
+ # message(STATUS "Using OpenSSL version ${OPENSSL_VERSION}")
+#endif(USE_OPENSSL)
 
 if(CODECOVERAGE)
   message(STATUS "Code coverage is enabled.")

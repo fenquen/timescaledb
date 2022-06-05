@@ -4406,6 +4406,7 @@ _process_utility_init(void)
 {
 	prev_ProcessUtility_hook = ProcessUtility_hook;
 	ProcessUtility_hook = timescaledb_ddl_command_start;
+
 	RegisterXactCallback(process_utility_xact_abort, NULL);
 	RegisterSubXactCallback(process_utility_subxact_abort, NULL);
 }
