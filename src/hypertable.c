@@ -1776,7 +1776,7 @@ Datum ts_hypertable_distributed_create(PG_FUNCTION_ARGS) {
  * All parameters after tim_dim_info can be NUL
  * returns 'true' if new hypertable was created, false if 'if_not_exists' and the hypertable already exists.
  */
-bool ts_hypertable_create_from_info(Oid table_relid,
+bool ts_hypertable_create_from_info(Oid tableOid,
 									int32 hypertable_id,
 									uint32 flags,
 									DimensionInfo *time_dim_info,
@@ -1789,18 +1789,18 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 	Hypertable *ht;
 	Oid associated_schema_oid;
 	Oid user_oid = GetUserId();
-	Oid tspc_oid = get_rel_tablespace(table_relid);
+	Oid tspc_oid = get_rel_tablespace(tableOid);
 
 	NameData schema_name, table_name, default_associated_schema_name;
 	Relation originalTable;
 	bool if_not_exists = (flags & HYPERTABLE_CREATE_IF_NOT_EXISTS) != 0;
 
 	/* quick exit in the easy if-not-exists case to avoid all locking */
-	if (if_not_exists && ts_is_hypertable(table_relid)) {
+	if (if_not_exists && ts_is_hypertable(tableOid)) {
 		ereport(NOTICE,
 				(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
 				 errmsg("table \"%s\" is already a hypertable, skipping",
-						get_rel_name(table_relid))));
+						get_rel_name(tableOid))));
 
 		return false;
 	}
@@ -1815,10 +1815,10 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 	 * migrating data, then shouldn't have much contention on the table thus
 	 * not worth optimizing.
 	 */
-	originalTable = table_open(table_relid, AccessExclusiveLock);
+	originalTable = table_open(tableOid, AccessExclusiveLock);
 
 	/* recheck after getting lock */
-	if (ts_is_hypertable(table_relid)) {
+	if (ts_is_hypertable(tableOid)) {
 		/*
 		 * Unlock and return. Note that unlocking is analogous to what PG does
 		 * for ALTER TABLE ADD COLUMN IF NOT EXIST
@@ -1829,27 +1829,27 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 			ereport(NOTICE,
 					(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
 					 errmsg("table \"%s\" is already a hypertable, skipping",
-							get_rel_name(table_relid))));
+							get_rel_name(tableOid))));
 			return false;
 		}
 
 		ereport(ERROR,
 				(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
-				 errmsg("table \"%s\" is already a hypertable", get_rel_name(table_relid))));
+				 errmsg("table \"%s\" is already a hypertable", get_rel_name(tableOid))));
 	}
 
 	/*
 	 * Check that the user has permissions to make this table into a
 	 * hypertable
 	 */
-	ts_hypertable_permissions_check(table_relid, user_oid);
+	ts_hypertable_permissions_check(tableOid, user_oid);
 
 	/* Is this the right kind of relation? */
-	switch (get_rel_relkind(table_relid)) {
+	switch (get_rel_relkind(tableOid)) {
 		case RELKIND_PARTITIONED_TABLE:
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("table \"%s\" is already partitioned", get_rel_name(table_relid)),
+					 errmsg("table \"%s\" is already partitioned", get_rel_name(tableOid)),
 					 errdetail("It is not possible to turn partitioned tables into hypertables.")));
 		case RELKIND_MATVIEW:
 		case RELKIND_RELATION:
@@ -1859,35 +1859,35 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 	}
 
 	/* Check that the table doesn't have any unsupported constraints */
-	hypertable_validate_constraints(table_relid, replication_factor);
+	hypertable_validate_constraints(tableOid, replication_factor);
 
 	bool table_has_data = relation_has_tuples(originalTable);
 
 	if ((flags & HYPERTABLE_CREATE_MIGRATE_DATA) == 0 && table_has_data)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("table \"%s\" is not empty", get_rel_name(table_relid)),
+				 errmsg("table \"%s\" is not empty", get_rel_name(tableOid)),
 				 errhint("You can migrate data by specifying 'migrate_data => true' when calling "
 						 "this function.")));
 
-	if (is_inheritance_table(table_relid))
+	if (is_inheritance_table(tableOid))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("table \"%s\" is already partitioned", get_rel_name(table_relid)),
+				 errmsg("table \"%s\" is already partitioned", get_rel_name(tableOid)),
 				 errdetail(
 					 "It is not possible to turn tables that use inheritance into hypertables.")));
 
-	if (!table_is_logged(table_relid))
+	if (!table_is_logged(tableOid))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("table \"%s\" has to be logged", get_rel_name(table_relid)),
+				 errmsg("table \"%s\" has to be logged", get_rel_name(tableOid)),
 				 errdetail(
 					 "It is not possible to turn temporary or unlogged tables into hypertables.")));
 
 	if (table_has_replica_identity(originalTable))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("table \"%s\" has replica identity set", get_rel_name(table_relid)),
+				 errmsg("table \"%s\" has replica identity set", get_rel_name(tableOid)),
 				 errdetail("Logical replication is not supported on hypertables.")));
 
 	if (table_has_rules(originalTable))
@@ -1895,7 +1895,7 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("hypertables do not support rules"),
 				 errdetail("Table \"%s\" has attached rules, which do not work on hypertables.",
-						   get_rel_name(table_relid)),
+						   get_rel_name(tableOid)),
 				 errhint("Remove the rules before creating a hypertable.")));
 
 	/*
@@ -1918,13 +1918,13 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 	 * Hypertables do not support transition tables in triggers, so if the
 	 * table already has such triggers we bail out
 	 */
-	if (ts_relation_has_transition_table_trigger(table_relid))
+	if (ts_relation_has_transition_table_trigger(tableOid))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("hypertables do not support transition tables in triggers")));
 
 	if (NULL == chunk_sizing_info)
-		chunk_sizing_info = ts_chunk_sizing_info_get_default_disabled(table_relid);
+		chunk_sizing_info = ts_chunk_sizing_info_get_default_disabled(tableOid);
 
 	/* Validate and set chunk sizing information */
 	if (OidIsValid(chunk_sizing_info->func)) {
@@ -1951,8 +1951,8 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 	}
 
 	/* Checks pass, now we can create the catalog information */
-	namestrcpy(&schema_name, get_namespace_name(get_rel_namespace(table_relid)));
-	namestrcpy(&table_name, get_rel_name(table_relid));
+	namestrcpy(&schema_name, get_namespace_name(get_rel_namespace(tableOid)));
+	namestrcpy(&table_name, get_rel_name(tableOid));
 
 	// inert into 到 _timescaledb_catalog.hypertable
 	hypertable_insert(hypertable_id,
@@ -1971,7 +1971,7 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 
 	/* Get the a Hypertable object via the cache */
 	time_dim_info->ht =
-		ts_hypertable_cache_get_cache_and_entry(table_relid, CACHE_FLAG_NONE, &hcache);
+		ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_NONE, &hcache);
 
 	/* Add validated dimensions */
 	ts_dimension_add_from_info(time_dim_info);
@@ -1984,7 +1984,7 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 	/* Refresh the cache to get the updated hypertable with added dimensions */
 	ts_cache_release(hcache);
 
-	ht = ts_hypertable_cache_get_cache_and_entry(table_relid, CACHE_FLAG_NONE, &hcache);
+	ht = ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_NONE, &hcache);
 
 	/* Verify that existing indexes are compatible with a hypertable */
 	ts_indexing_verify_indexes(ht);
@@ -1994,7 +1994,7 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 		NameData tspc_name;
 
 		namestrcpy(&tspc_name, get_tablespace_name(tspc_oid));
-		ts_tablespace_attach_internal(&tspc_name, table_relid, false);
+		ts_tablespace_attach_internal(&tspc_name, tableOid, false);
 	}
 
 	/*
@@ -2013,7 +2013,7 @@ bool ts_hypertable_create_from_info(Oid table_relid,
 		timescaledb_move_from_table_to_chunks(ht, RowExclusiveLock);
 	}
 
-	insert_blocker_trigger_add(table_relid);
+	insert_blocker_trigger_add(tableOid);
 
 	if ((flags & HYPERTABLE_CREATE_DISABLE_DEFAULT_INDEXES) == 0)
 		ts_indexing_create_default_indexes(ht);

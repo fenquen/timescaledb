@@ -90,7 +90,7 @@ typedef enum HypertableType {
 } HypertableType;
 
 extern TSDLLEXPORT bool ts_hypertable_create_from_info(
-	Oid table_relid, int32 hypertable_id, uint32 flags, DimensionInfo *time_dim_info,
+	Oid tableOid, int32 hypertable_id, uint32 flags, DimensionInfo *time_dim_info,
 	DimensionInfo *space_dim_info, Name associated_schema_name, Name associated_table_prefix,
 	ChunkSizingInfo *chunk_sizing_info, int16 replication_factor, List *data_node_names);
 extern TSDLLEXPORT bool ts_hypertable_create_compressed(Oid table_relid, int32 hypertable_id);
