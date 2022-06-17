@@ -104,24 +104,19 @@ typedef struct ScannerCtx
 	Oid index;
 	Relation tablerel;
 	Relation indexrel;
-	ScanKey scankey;
+	ScanKey scankey; // 要搜索的值是在sk_argument
 	int flags;
-	int nkeys, norderbys, limit; /* Limit on number of tuples to return. 0 or
-								  * less means no limit */
+	int nkeys, norderbys, limit; /* Limit on number of tuples to return. 0 or less means no limit */
 	bool want_itup;
 	LOCKMODE lockmode;
-	MemoryContext result_mctx; /* The memory context to allocate the result
-								* on */
+	MemoryContext result_mctx; /* The memory context to allocate the result on */
 	const ScanTupLock *tuplock;
 	ScanDirection scandirection;
-	Snapshot snapshot; /* Snapshot requested by the caller. Set automatically
-						* when NULL */
-	void *data;		   /* User-provided data passed on to filter()
-						* and tuple_found() */
+	Snapshot snapshot; /* Snapshot requested by the caller. Set automatically when NULL */
+	void *data;		   /* User-provided data passed on to filter() and tuple_found() */
 
 	/*
-	 * Optional handler called before a scan starts, but relation locks are
-	 * acquired.
+	 * Optional handler called before a scan starts, but relation locks are acquired.
 	 */
 	void (*prescan)(void *data);
 
@@ -147,15 +142,15 @@ typedef struct ScannerCtx
 
 /* Performs an index scan or heap scan and returns the number of matching
  * tuples. */
-extern TSDLLEXPORT Relation ts_scanner_open(ScannerCtx *ctx);
+extern TSDLLEXPORT Relation ts_scanner_open(ScannerCtx *scannerCtx);
 extern TSDLLEXPORT void ts_scanner_close(ScannerCtx *ctx);
-extern TSDLLEXPORT int ts_scanner_scan(ScannerCtx *ctx);
+extern TSDLLEXPORT int ts_scanner_scan(ScannerCtx *scannerCtx);
 extern TSDLLEXPORT bool ts_scanner_scan_one(ScannerCtx *ctx, bool fail_if_not_found,
 											const char *item_type);
-extern TSDLLEXPORT void ts_scanner_start_scan(ScannerCtx *ctx);
+extern TSDLLEXPORT void ts_scanner_start_scan(ScannerCtx *scannerCtx);
 extern TSDLLEXPORT void ts_scanner_end_scan(ScannerCtx *ctx);
 extern TSDLLEXPORT void ts_scanner_rescan(ScannerCtx *ctx, const ScanKey scankey);
-extern TSDLLEXPORT TupleInfo *ts_scanner_next(ScannerCtx *ctx);
+extern TSDLLEXPORT TupleInfo *ts_scanner_next(ScannerCtx *scannerCtx);
 extern TSDLLEXPORT ItemPointer ts_scanner_get_tuple_tid(TupleInfo *ti);
 extern TSDLLEXPORT HeapTuple ts_scanner_fetch_heap_tuple(const TupleInfo *ti, bool materialize,
 														 bool *should_free);

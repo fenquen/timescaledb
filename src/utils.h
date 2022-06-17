@@ -23,7 +23,7 @@
  * data. However, this information is not present in case of a direct function
  * call, so fall back to the C-function name.
  */
-#define TS_FUNCNAME()                                                                              \
+#define TS_FUNCNAME() \
 	(psprintf("%s()", fcinfo->flinfo ? get_func_name(FC_FN_OID(fcinfo)) : __func__))
 
 #define TS_PREVENT_FUNC_IF_READ_ONLY() PreventCommandIfReadOnly(TS_FUNCNAME())
@@ -33,7 +33,7 @@
 #define MIN(x, y) ((x) < (y) ? x : y)
 
 /* Use a special pseudo-random field 4 value to avoid conflicting with user-advisory-locks */
-#define TS_SET_LOCKTAG_ADVISORY(tag, id1, id2, id3)                                                \
+#define TS_SET_LOCKTAG_ADVISORY(tag, id1, id2, id3) \
 	SET_LOCKTAG_ADVISORY((tag), (id1), (id2), (id3), 29749)
 
 /* find the length of a statically sized array */
@@ -41,8 +41,7 @@
 
 extern TSDLLEXPORT bool ts_type_is_int8_binary_compatible(Oid sourcetype);
 
-typedef enum TimevalInfinity
-{
+typedef enum TimevalInfinity {
 	TimevalFinite = 0,
 	TimevalNegInfinity = -1,
 	TimevalPosInfinity = 1,
@@ -112,28 +111,26 @@ extern TSDLLEXPORT bool ts_has_row_security(Oid relid);
 
 extern TSDLLEXPORT List *ts_get_reloptions(Oid relid);
 
-#define STRUCT_FROM_SLOT(slot, mctx, to_type, form_type)                                           \
+#define STRUCT_FROM_SLOT(slot, mctx, to_type, form_type) \
 	(to_type *) ts_create_struct_from_slot(slot, mctx, sizeof(to_type), sizeof(form_type));
 
 /* note PG10 has_superclass but PG96 does not so use this */
 #define is_inheritance_child(relid) (ts_inheritance_parent_relid(relid) != InvalidOid)
 
-#define is_inheritance_parent(relid)                                                               \
+#define is_inheritance_parent(relid) \
 	(find_inheritance_children(table_relid, AccessShareLock) != NIL)
 
 #define is_inheritance_table(relid) (is_inheritance_child(relid) || is_inheritance_parent(relid))
 
 static inline int64
-int64_min(int64 a, int64 b)
-{
+int64_min(int64 a, int64 b) {
 	if (a <= b)
 		return a;
 	return b;
 }
 
 static inline int64
-int64_saturating_add(int64 a, int64 b)
-{
+int64_saturating_add(int64 a, int64 b) {
 	int64 result;
 	bool overflowed = pg_add_s64_overflow(a, b, &result);
 	if (overflowed)
@@ -142,8 +139,7 @@ int64_saturating_add(int64 a, int64 b)
 }
 
 static inline int64
-int64_saturating_sub(int64 a, int64 b)
-{
+int64_saturating_sub(int64 a, int64 b) {
 	int64 result;
 	bool overflowed = pg_sub_s64_overflow(a, b, &result);
 	if (overflowed)
@@ -152,20 +148,17 @@ int64_saturating_sub(int64 a, int64 b)
 }
 
 static inline bool
-ts_flags_are_set_32(uint32 bitmap, uint32 flags)
-{
+ts_flags_are_set_32(uint32 bitmap, uint32 flags) {
 	return (bitmap & flags) == flags;
 }
 
 static inline uint32
-ts_set_flags_32(uint32 bitmap, uint32 flags)
-{
+ts_set_flags_32(uint32 bitmap, uint32 flags) {
 	return bitmap | flags;
 }
 
 static inline uint32
-ts_clear_flags_32(uint32 bitmap, uint32 flags)
-{
+ts_clear_flags_32(uint32 bitmap, uint32 flags) {
 	return bitmap & ~flags;
 }
 
@@ -178,14 +171,12 @@ ts_clear_flags_32(uint32 bitmap, uint32 flags)
  * fail if it has already been registered.
  */
 static inline void
-TryRegisterCustomScanMethods(const CustomScanMethods *methods)
-{
+TryRegisterCustomScanMethods(const CustomScanMethods *methods) {
 	if (!GetCustomScanMethods(methods->CustomName, true))
 		RegisterCustomScanMethods(methods);
 }
 
-typedef struct RelationSize
-{
+typedef struct RelationSize {
 	int64 total_size;
 	int64 heap_size;
 	int64 toast_size;

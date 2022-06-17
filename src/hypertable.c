@@ -60,8 +60,7 @@
 #include "cross_module_fn.h"
 #include "scan_iterator.h"
 
-Oid
-ts_rel_get_owner(Oid relid) {
+Oid ts_rel_get_owner(Oid relid) {
 	HeapTuple tuple;
 	Oid ownerid;
 
@@ -82,8 +81,7 @@ ts_rel_get_owner(Oid relid) {
 	return ownerid;
 }
 
-bool
-ts_hypertable_has_privs_of(Oid hypertable_oid, Oid userid) {
+bool ts_hypertable_has_privs_of(Oid hypertable_oid, Oid userid) {
 	return has_privs_of_role(userid, ts_rel_get_owner(hypertable_oid));
 }
 
@@ -94,8 +92,7 @@ ts_hypertable_has_privs_of(Oid hypertable_oid, Oid userid) {
  * versions so that tests need not change due to one word changes in error
  * messages and because it is more clear this way.
  */
-Oid
-ts_hypertable_permissions_check(Oid hypertable_oid, Oid userid) {
+Oid ts_hypertable_permissions_check(Oid hypertable_oid, Oid userid) {
 	Oid ownerid = ts_rel_get_owner(hypertable_oid);
 
 	if (!has_privs_of_role(userid, ownerid))
@@ -106,8 +103,7 @@ ts_hypertable_permissions_check(Oid hypertable_oid, Oid userid) {
 	return ownerid;
 }
 
-void
-ts_hypertable_permissions_check_by_id(int32 hypertable_id) {
+void ts_hypertable_permissions_check_by_id(int32 hypertable_id) {
 	Oid table_relid = ts_hypertable_id_to_relid(hypertable_id);
 	ts_hypertable_permissions_check(table_relid, GetUserId());
 }
@@ -163,8 +159,7 @@ hypertable_formdata_make_tuple(const FormData_hypertable *fd, TupleDesc desc) {
 	return heap_form_tuple(desc, values, nulls);
 }
 
-void
-ts_hypertable_formdata_fill(FormData_hypertable *fd, const TupleInfo *ti) {
+void ts_hypertable_formdata_fill(FormData_hypertable *fd, const TupleInfo *ti) {
 	bool nulls[Natts_hypertable];
 	Datum values[Natts_hypertable];
 	bool should_free;
@@ -260,8 +255,7 @@ hypertable_tuple_get_relid(TupleInfo *ti, void *data) {
 	return SCAN_DONE;
 }
 
-Oid
-ts_hypertable_id_to_relid(int32 hypertable_id) {
+Oid ts_hypertable_id_to_relid(int32 hypertable_id) {
 	Catalog *catalog = ts_catalog_get();
 	Oid relid = InvalidOid;
 	ScanKeyData scankey[1];
@@ -288,8 +282,7 @@ ts_hypertable_id_to_relid(int32 hypertable_id) {
 	return relid;
 }
 
-int32
-ts_hypertable_relid_to_id(Oid relid) {
+int32 ts_hypertable_relid_to_id(Oid relid) {
 	Cache *hcache;
 	Hypertable *ht = ts_hypertable_cache_get_cache_and_entry(relid, CACHE_FLAG_MISSING_OK, &hcache);
 	int result = (ht == NULL) ? -1 : ht->fd.id;
@@ -299,8 +292,7 @@ ts_hypertable_relid_to_id(Oid relid) {
 }
 
 TS_FUNCTION_INFO_V1(ts_hypertable_get_time_type);
-Datum
-ts_hypertable_get_time_type(PG_FUNCTION_ARGS) {
+Datum ts_hypertable_get_time_type(PG_FUNCTION_ARGS) {
 	int32 hypertable_id = PG_GETARG_INT32(0);
 	Cache *hcache = ts_hypertable_cache_pin();
 	Hypertable *ht = ts_hypertable_cache_get_entry_by_id(hcache, hypertable_id);
@@ -333,27 +325,33 @@ hypertable_filter_exclude_compressed_and_materialization(const TupleInfo *ti, vo
 	return hypertable_is_compressed_or_materialization(ht) ? SCAN_EXCLUDE : SCAN_INCLUDE;
 }
 
-static int
-hypertable_scan_limit_internal(ScanKeyData *scankey, int num_scankeys, int indexid,
-							   tuple_found_func on_tuple_found, void *scandata, int limit,
-							   LOCKMODE lock, bool tuplock, MemoryContext mctx,
-							   tuple_filter_func filter) {
+static int hypertable_scan_limit_internal(ScanKeyData *scanKeyData, // 数组首地址
+										  int scanKeyCount,			// 数组数量
+										  int indexid,
+										  tuple_found_func tupleFoundFunc,
+										  void *scandata,
+										  int limit,
+										  LOCKMODE lock,
+										  bool tuplock,
+										  MemoryContext mctx,
+										  tuple_filter_func tupleFilterFunc) {
 	Catalog *catalog = ts_catalog_get();
-	ScannerCtx scanctx = {
+
+	ScannerCtx scannerCtx = {
 		.table = catalog_get_table_id(catalog, HYPERTABLE),
 		.index = catalog_get_index(catalog, HYPERTABLE, indexid),
-		.nkeys = num_scankeys,
-		.scankey = scankey,
+		.nkeys = scanKeyCount,
+		.scankey = scanKeyData, // 其中的datum便是要搜索的内容
 		.data = scandata,
 		.limit = limit,
-		.tuple_found = on_tuple_found,
+		.tuple_found = tupleFoundFunc,
 		.lockmode = lock,
-		.filter = filter,
+		.filter = tupleFilterFunc,
 		.scandirection = ForwardScanDirection,
 		.result_mctx = mctx,
 	};
 
-	return ts_scanner_scan(&scanctx);
+	return ts_scanner_scan(&scannerCtx);
 }
 
 static ScanTupleResult
@@ -401,8 +399,7 @@ hypertable_tuple_update(TupleInfo *ti, void *data) {
 
 		namestrcpy(&ht->fd.chunk_sizing_func_schema, NameStr(info.func_schema));
 		namestrcpy(&ht->fd.chunk_sizing_func_name, NameStr(info.func_name));
-	}
-	else
+	} else
 		elog(ERROR, "chunk sizing function cannot be NULL");
 
 	new_tuple = hypertable_formdata_make_tuple(&ht->fd, ts_scanner_get_tupledesc(ti));
@@ -414,8 +411,7 @@ hypertable_tuple_update(TupleInfo *ti, void *data) {
 	return SCAN_DONE;
 }
 
-int
-ts_hypertable_update(Hypertable *ht) {
+int ts_hypertable_update(Hypertable *ht) {
 	ScanKeyData scankey[1];
 
 	ScanKeyInit(&scankey[0],
@@ -436,41 +432,47 @@ ts_hypertable_update(Hypertable *ht) {
 										  NULL);
 }
 
-int
-ts_hypertable_scan_with_memory_context(const char *schema, const char *table,
-									   tuple_found_func tuple_found, void *data, LOCKMODE lockmode,
-									   bool tuplock, MemoryContext mctx) {
-	ScanKeyData scankey[2];
+int ts_hypertable_scan_with_memory_context(const char *schemaName,
+										   const char *tableName,
+										   tuple_found_func tupleFoundFunc,
+										   void *data,
+										   LOCKMODE lockmode,
+										   bool tuplock,
+										   MemoryContext memoryContext) {
+	ScanKeyData scanKeyData[2];
 	NameData schema_name = { { 0 } };
 	NameData table_name = { { 0 } };
 
-	if (schema)
-		namestrcpy(&schema_name, schema);
+	if (schemaName) {
+		namestrcpy(&schema_name, schemaName);
+	}
 
-	if (table)
-		namestrcpy(&table_name, table);
+	if (tableName) {
+		namestrcpy(&table_name, tableName);
+	}
 
-	/* Perform an index scan on schema and table. */
-	ScanKeyInit(&scankey[0],
+	// 去找tableName和schemaName都满足的
+	/* Perform an index scan on schemaName and tableName. */
+	ScanKeyInit(&scanKeyData[0],
 				Anum_hypertable_name_idx_table,
 				BTEqualStrategyNumber,
 				F_NAMEEQ,
 				NameGetDatum(&table_name));
-	ScanKeyInit(&scankey[1],
+	ScanKeyInit(&scanKeyData[1],
 				Anum_hypertable_name_idx_schema,
 				BTEqualStrategyNumber,
 				F_NAMEEQ,
 				NameGetDatum(&schema_name));
 
-	return hypertable_scan_limit_internal(scankey,
+	return hypertable_scan_limit_internal(scanKeyData,
 										  2,
 										  HYPERTABLE_NAME_INDEX,
-										  tuple_found,
+										  tupleFoundFunc,
 										  data,
 										  1,
 										  lockmode,
 										  tuplock,
-										  mctx,
+										  memoryContext,
 										  NULL);
 }
 
@@ -600,8 +602,7 @@ hypertable_tuple_delete(TupleInfo *ti, void *data) {
 	return SCAN_CONTINUE;
 }
 
-int
-ts_hypertable_delete_by_name(const char *schema_name, const char *table_name) {
+int ts_hypertable_delete_by_name(const char *schema_name, const char *table_name) {
 	ScanKeyData scankey[2];
 
 	ScanKeyInit(&scankey[0],
@@ -627,8 +628,7 @@ ts_hypertable_delete_by_name(const char *schema_name, const char *table_name) {
 										  NULL);
 }
 
-int
-ts_hypertable_delete_by_id(int32 hypertable_id) {
+int ts_hypertable_delete_by_id(int32 hypertable_id) {
 	ScanKeyData scankey[1];
 
 	ScanKeyInit(&scankey[0],
@@ -649,8 +649,7 @@ ts_hypertable_delete_by_id(int32 hypertable_id) {
 										  NULL);
 }
 
-void
-ts_hypertable_drop(Hypertable *hypertable, DropBehavior behavior) {
+void ts_hypertable_drop(Hypertable *hypertable, DropBehavior behavior) {
 	/* The actual table might have been deleted already, but we still need to
 	 * clean up the catalog entry. */
 	if (OidIsValid(hypertable->main_table_relid)) {
@@ -686,8 +685,7 @@ reset_associated_tuple_found(TupleInfo *ti, void *data) {
 /*
  * Reset the matching associated schema to the internal schema.
  */
-int
-ts_hypertable_reset_associated_schema_name(const char *associated_schema) {
+int ts_hypertable_reset_associated_schema_name(const char *associated_schema) {
 	ScanKeyData scankey[1];
 
 	ScanKeyInit(&scankey[0],
@@ -736,8 +734,7 @@ ts_hypertable_lock_tuple(Oid table_relid) {
 	return result;
 }
 
-bool
-ts_hypertable_lock_tuple_simple(Oid table_relid) {
+bool ts_hypertable_lock_tuple_simple(Oid table_relid) {
 	TM_Result result = ts_hypertable_lock_tuple(table_relid);
 
 	switch (result) {
@@ -785,22 +782,19 @@ ts_hypertable_lock_tuple_simple(Oid table_relid) {
 	}
 }
 
-int
-ts_hypertable_set_name(Hypertable *ht, const char *newname) {
+int ts_hypertable_set_name(Hypertable *ht, const char *newname) {
 	namestrcpy(&ht->fd.table_name, newname);
 
 	return ts_hypertable_update(ht);
 }
 
-int
-ts_hypertable_set_schema(Hypertable *ht, const char *newname) {
+int ts_hypertable_set_schema(Hypertable *ht, const char *newname) {
 	namestrcpy(&ht->fd.schema_name, newname);
 
 	return ts_hypertable_update(ht);
 }
 
-int
-ts_hypertable_set_num_dimensions(Hypertable *ht, int16 num_dimensions) {
+int ts_hypertable_set_num_dimensions(Hypertable *ht, int16 num_dimensions) {
 	Assert(num_dimensions > 0);
 	ht->fd.num_dimensions = num_dimensions;
 	return ts_hypertable_update(ht);
@@ -860,8 +854,7 @@ hypertable_insert(int32 hypertable_id, Name schema_name, Name table_name,
 					 DEFAULT_ASSOCIATED_DISTRIBUTED_TABLE_PREFIX_FORMAT,
 					 fd.id);
 		namestrcpy(&fd.associated_table_prefix, NameStr(default_associated_table_prefix));
-	}
-	else {
+	} else {
 		namestrcpy(&fd.associated_table_prefix, NameStr(*associated_table_prefix));
 	}
 	if (strnlen(NameStr(fd.associated_table_prefix), NAMEDATALEN) > MAXIMUM_PREFIX_LENGTH)
@@ -909,8 +902,7 @@ ts_hypertable_get_by_name(const char *schema, const char *name) {
 	return ht;
 }
 
-void
-ts_hypertable_scan_by_name(ScanIterator *iterator, const char *schema, const char *name) {
+void ts_hypertable_scan_by_name(ScanIterator *iterator, const char *schema, const char *name) {
 	iterator->ctx.index = catalog_get_index(ts_catalog_get(), HYPERTABLE, HYPERTABLE_NAME_INDEX);
 
 	/* both cannot be NULL inputs */
@@ -939,9 +931,8 @@ ts_hypertable_scan_by_name(ScanIterator *iterator, const char *schema, const cha
  *
  * Return true if hypertable is found, false otherwise.
  */
-bool
-ts_hypertable_get_attributes_by_name(const char *schema, const char *name,
-									 FormData_hypertable *form) {
+bool ts_hypertable_get_attributes_by_name(const char *schema, const char *name,
+										  FormData_hypertable *form) {
 	ScanIterator iterator =
 		ts_scan_iterator_create(HYPERTABLE, AccessShareLock, CurrentMemoryContext);
 
@@ -1048,8 +1039,7 @@ ts_hypertable_get_or_create_chunk(const Hypertable *h, const Point *point) {
 	return hypertable_get_chunk(h, point, true, true);
 }
 
-bool
-ts_hypertable_has_tablespace(const Hypertable *ht, Oid tspc_oid) {
+bool ts_hypertable_has_tablespace(const Hypertable *ht, Oid tspc_oid) {
 	Tablespaces *tspcs = ts_tablespace_scan(ht->fd.id);
 
 	return ts_tablespaces_contain(tspcs, tspc_oid);
@@ -1161,13 +1151,11 @@ hypertable_relid_lookup(Oid relid) {
  * Returns a hypertable's relation ID (OID) iff the given RangeVar corresponds to
  * a hypertable, otherwise InvalidOid.
  */
-Oid
-ts_hypertable_relid(RangeVar *rv) {
+Oid ts_hypertable_relid(RangeVar *rv) {
 	return hypertable_relid_lookup(RangeVarGetRelid(rv, NoLock, true));
 }
 
-bool
-ts_is_hypertable(Oid relid) {
+bool ts_is_hypertable(Oid relid) {
 	if (!OidIsValid(relid))
 		return false;
 	return hypertable_relid_lookup(relid) != InvalidOid;
@@ -1211,8 +1199,7 @@ hypertable_check_associated_schema_permissions(const char *schema_name, Oid user
 					 errmsg("permissions denied: cannot create schema \"%s\" in database \"%s\"",
 							schema_name,
 							get_database_name(MyDatabaseId))));
-	}
-	else if (pg_namespace_aclcheck(schema_oid, user_oid, ACL_CREATE) != ACLCHECK_OK)
+	} else if (pg_namespace_aclcheck(schema_oid, user_oid, ACL_CREATE) != ACLCHECK_OK)
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("permissions denied: cannot create chunks in schema \"%s\"", schema_name)));
@@ -1253,8 +1240,7 @@ table_has_replica_identity(const Relation rel) {
 
 static bool inline table_has_rules(Relation rel) { return rel->rd_rules != NULL; }
 
-bool
-ts_hypertable_has_chunks(Oid table_relid, LOCKMODE lockmode) {
+bool ts_hypertable_has_chunks(Oid table_relid, LOCKMODE lockmode) {
 	return find_inheritance_children(table_relid, lockmode) != NIL;
 }
 
@@ -1351,8 +1337,7 @@ hypertable_validate_constraints(Oid relid, int replication_factor) {
  */
 TS_FUNCTION_INFO_V1(ts_hypertable_insert_blocker);
 
-Datum
-ts_hypertable_insert_blocker(PG_FUNCTION_ARGS) {
+Datum ts_hypertable_insert_blocker(PG_FUNCTION_ARGS) {
 	TriggerData *trigdata = (TriggerData *) fcinfo->context;
 	const char *relname = get_rel_name(trigdata->tg_relation->rd_id);
 
@@ -1478,8 +1463,7 @@ TS_FUNCTION_INFO_V1(ts_hypertable_insert_blocker_trigger_add);
  * In case the hypertable's root table has data in it, we bail out with an
  * error instructing the user to fix the issue first.
  */
-Datum
-ts_hypertable_insert_blocker_trigger_add(PG_FUNCTION_ARGS) {
+Datum ts_hypertable_insert_blocker_trigger_add(PG_FUNCTION_ARGS) {
 	Oid relid = PG_GETARG_OID(0);
 	Oid old_trigger;
 
@@ -1542,8 +1526,7 @@ create_hypertable_datum(FunctionCallInfo fcinfo, const Hypertable *ht, bool crea
  * Check that the partitioning is reasonable and raise warnings if
  * not. Typically called after applying updates to a partitioning dimension.
  */
-void
-ts_hypertable_check_partitioning(const Hypertable *ht, int32 id_of_updated_dimension) {
+void ts_hypertable_check_partitioning(const Hypertable *ht, int32 id_of_updated_dimension) {
 	const Dimension *dim;
 
 	Assert(id_of_updated_dimension != InvalidOid);
@@ -1572,30 +1555,30 @@ ts_hypertable_check_partitioning(const Hypertable *ht, int32 id_of_updated_dimen
 	}
 }
 
-extern int16
-ts_validate_replication_factor(int32 replication_factor, bool is_null, bool is_dist_call) {
-	bool valid = replication_factor >= 1 && replication_factor <= PG_INT16_MAX;
+extern int16 ts_validate_replication_factor(int32 replicationFactor,
+											bool isNull,
+											bool isDistCall) {
+	bool valid = replicationFactor >= 1 && replicationFactor <= PG_INT16_MAX;
 
 	/*
-	 * In case of create_distributed_hypertable(replication_factor => NULL) call,
-	 * replication_factor is equal to 0 and in invalid range.
+	 * In case of create_distributed_hypertable(replicationFactor => NULL) call,
+	 * replicationFactor is equal to 0 and in invalid range.
 	 */
 
 	/* create_hypertable() call */
-	if (!is_dist_call) {
-		if (is_null) {
-			/* create_hypertable(replication_factor => NULL) */
-			Assert(replication_factor == 0);
+	if (!isDistCall) {
+		if (isNull) {
+			/* create_hypertable(replicationFactor => NULL) */
+			Assert(replicationFactor == 0);
 			valid = true;
-		}
-		else {
+		} else {
 			/*
-			 * Special replication_factor case for hypertables created on remote
+			 * Special replicationFactor case for hypertables created on remote
 			 * data nodes. Used to distinguish them from regular hypertables.
 			 *
 			 * Such argument is only allowed to be use by access node session.
 			 */
-			if (replication_factor == -1)
+			if (replicationFactor == -1)
 				valid = ts_cm_functions->is_access_node_session &&
 						ts_cm_functions->is_access_node_session();
 		}
@@ -1609,10 +1592,10 @@ ts_validate_replication_factor(int32 replication_factor, bool is_null, bool is_d
 						 PG_INT16_MAX)));
 
 	/*
-	 * replication_factor is within bounds, so it is now safe to convert it to
+	 * replicationFactor is within bounds, so it is now safe to convert it to
 	 * a smallint/int16, which is the format in the catalog table
 	 */
-	return (int16) (replication_factor & 0xFFFF);
+	return (int16) (replicationFactor & 0xFFFF);
 }
 
 TS_FUNCTION_INFO_V1(ts_hypertable_create);
@@ -1639,183 +1622,170 @@ TS_FUNCTION_INFO_V1(ts_hypertable_distributed_create);
  * 14 replication_factor      INTEGER = NULL
  * 15 data nodes              NAME[] = NULL
  */
-static Datum
-ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool is_dist_call) {
+static Datum ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool isDistCall) {
 	Oid tableOid = PG_ARGISNULL(0) ? InvalidOid : PG_GETARG_OID(0);
-	Name time_dim_name = PG_ARGISNULL(1) ? NULL : PG_GETARG_NAME(1);
-	Name space_dim_name = PG_ARGISNULL(2) ? NULL : PG_GETARG_NAME(2);
-	Name associated_schema_name = PG_ARGISNULL(4) ? NULL : PG_GETARG_NAME(4);
-	Name associated_table_prefix = PG_ARGISNULL(5) ? NULL : PG_GETARG_NAME(5);
-	bool create_default_indexes =
-		PG_ARGISNULL(7) ? false : PG_GETARG_BOOL(7); /* Defaults to true in the sql code */
-	bool if_not_exists = PG_ARGISNULL(8) ? false : PG_GETARG_BOOL(8);
-	bool migrate_data = PG_ARGISNULL(10) ? false : PG_GETARG_BOOL(10);
-	DimensionInfo *time_dim_info =
-		ts_dimension_info_create_open(tableOid,
-									  /* column name */
-									  time_dim_name,
-									  /* interval */
-									  PG_ARGISNULL(6) ? Int64GetDatum(-1) : PG_GETARG_DATUM(6),
-									  /* interval type */
-									  PG_ARGISNULL(6) ? InvalidOid :
-														  get_fn_expr_argtype(fcinfo->flinfo, 6),
-									  /* partitioning func */
-									  PG_ARGISNULL(13) ? InvalidOid : PG_GETARG_OID(13));
-	DimensionInfo *space_dim_info = NULL;
-	bool replication_factor_is_null = PG_ARGISNULL(14);
-	int32 replication_factor_in = replication_factor_is_null ? 0 : PG_GETARG_INT32(14);
+	Name timeColumnName = PG_ARGISNULL(1) ? NULL : PG_GETARG_NAME(1);
+	Name spaceColumnName = PG_ARGISNULL(2) ? NULL : PG_GETARG_NAME(2);
+	Name associatedSchemaName = PG_ARGISNULL(4) ? NULL : PG_GETARG_NAME(4);
+	Name associatedTablePrefix = PG_ARGISNULL(5) ? NULL : PG_GETARG_NAME(5);
+	bool createDefaultIndexes = PG_ARGISNULL(7) ? false : PG_GETARG_BOOL(7); /* Defaults to true in the sql code */
+	bool ifNotExists = PG_ARGISNULL(8) ? false : PG_GETARG_BOOL(8);
+	bool migrateData = PG_ARGISNULL(10) ? false : PG_GETARG_BOOL(10);
 
-	ArrayType *data_node_arr = PG_ARGISNULL(15) ? NULL : PG_GETARG_ARRAYTYPE_P(15);
+	DimensionInfo *spaceDimensionInfo = NULL;
+	bool replicationFactorIsNull = PG_ARGISNULL(14);
+	int32 replicationFactorIn = replicationFactorIsNull ? 0 : PG_GETARG_INT32(14);
 
-	ChunkSizingInfo chunk_sizing_info = {
+	ArrayType *dataNodeArr = PG_ARGISNULL(15) ? NULL : PG_GETARG_ARRAYTYPE_P(15);
+
+	DimensionInfo *timeDimensionInfo = ts_dimension_info_create_open(tableOid,
+																	 timeColumnName,
+																	 PG_ARGISNULL(6) ? Int64GetDatum(-1) : PG_GETARG_DATUM(6),
+																	 PG_ARGISNULL(6) ? InvalidOid : get_fn_expr_argtype(fcinfo->flinfo, 6),
+																	 PG_ARGISNULL(13) ? InvalidOid : PG_GETARG_OID(13));
+
+	ChunkSizingInfo chunkSizingInfo = {
 		.table_relid = tableOid,
 		.target_size = PG_ARGISNULL(11) ? NULL : PG_GETARG_TEXT_P(11),
 		.func = PG_ARGISNULL(12) ? InvalidOid : PG_GETARG_OID(12),
 		.colname = PG_ARGISNULL(1) ? NULL : PG_GETARG_CSTRING(1),
-		.check_for_index = !create_default_indexes,
+		.check_for_index = !createDefaultIndexes,
 	};
 
-	Cache *hcache;
-
-	Datum result;
-	bool created;
-	uint32 flags = 0;
-	List *data_nodes = NIL;
-
-	TS_PREVENT_FUNC_IF_READ_ONLY();
-
 	if (!OidIsValid(tableOid)) {
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("relation cannot be NULL")));
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("relation cannot be NULL")));
 	}
 
-	if (migrate_data && is_dist_call) {
+	if (migrateData && isDistCall) {
 		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot migrate data for distributed hypertable")));
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("cannot migrate data for distributed hypertable")));
 	}
 
-	if (NULL == time_dim_name)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("time column cannot be NULL")));
+	if (NULL == timeColumnName) {
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("time column cannot be NULL")));
+	}
 
-	if (NULL != data_node_arr && ARR_NDIM(data_node_arr) > 1)
+	if (NULL != dataNodeArr && ARR_NDIM(dataNodeArr) > 1) {
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid data nodes format"),
 				 errhint("Specify a one-dimensional array of data nodes.")));
+	}
 
-	Hypertable *hypertable =
-		ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_MISSING_OK, &hcache);
+	Cache *cache;
+	bool created;
+
+	TS_PREVENT_FUNC_IF_READ_ONLY();
+
+	Hypertable *hypertable = ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_MISSING_OK, &cache);
 
 	if (hypertable) {
-		if (if_not_exists) {
+		if (ifNotExists) {
 			ereport(NOTICE,
 					(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
-					 errmsg("table \"%s\" is already a hypertable, skipping",
-							get_rel_name(tableOid))));
-		}
-		else {
+					 errmsg("table \"%s\" is already a hypertable, skipping", get_rel_name(tableOid))));
+		} else {
 			ereport(ERROR,
 					(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
 					 errmsg("table \"%s\" is already a hypertable", get_rel_name(tableOid))));
 		}
 		created = false;
-	}
-	else {
+	} else {
 		/* Release previously pinned cache */
-		ts_cache_release(hcache);
+		ts_cache_release(cache);
 
-		/*
-		 * Ensure replication factor is a valid value and convert it to
-		 * catalog table format
-		 */
-		int16 replicationFactor = ts_validate_replication_factor(replication_factor_in,
-																 replication_factor_is_null,
-																 is_dist_call);
+		// Ensure replication factor is a valid value and convert it to catalog table format
+		int16 replicationFactor = ts_validate_replication_factor(replicationFactorIn,
+																 replicationFactorIsNull,
+																 isDistCall);
+		List *dataNodeList = NIL;
 
-		/* Validate data nodes and check permissions on them if this is a
-		 * distributed hypertable. */
-		if (replicationFactor > 0)
-			data_nodes = ts_cm_functions->get_and_validate_data_node_list(data_node_arr);
+		/* Validate data nodes and check permissions on them if this is a distributed hypertable. */
+		if (replicationFactor > 0) {
+			dataNodeList = ts_cm_functions->get_and_validate_data_node_list(dataNodeArr);
+		}
 
-		if (NULL != space_dim_name) {
+		if (NULL != spaceColumnName) {
 			int16 num_partitions = PG_ARGISNULL(3) ? -1 : PG_GETARG_INT16(3);
 
 			/* If the number of partitions isn't specified, default to setting it
 			 * to the number of data nodes */
 			if (num_partitions < 1 && replicationFactor > 0) {
-				int num_nodes = list_length(data_nodes);
+				int num_nodes = list_length(dataNodeList);
 
 				Assert(num_nodes >= 0);
 				num_partitions = num_nodes & 0xFFFF;
 			}
 
-			space_dim_info =
+			spaceDimensionInfo =
 				ts_dimension_info_create_closed(tableOid,
 												/* column name */
-												space_dim_name,
+												spaceColumnName,
 												/* number partitions */
 												num_partitions,
 												/* partitioning func */
 												PG_ARGISNULL(9) ? InvalidOid : PG_GETARG_OID(9));
 		}
 
-		if (if_not_exists)
+		uint32 flags = 0;
+		if (ifNotExists) {
 			flags |= HYPERTABLE_CREATE_IF_NOT_EXISTS;
-		if (!create_default_indexes)
+		}
+		if (!createDefaultIndexes) {
 			flags |= HYPERTABLE_CREATE_DISABLE_DEFAULT_INDEXES;
-		if (migrate_data)
+		}
+		if (migrateData) {
 			flags |= HYPERTABLE_CREATE_MIGRATE_DATA;
+		}
 
 		created = ts_hypertable_create_from_info(tableOid,
 												 INVALID_HYPERTABLE_ID,
 												 flags,
-												 time_dim_info,
-												 space_dim_info,
-												 associated_schema_name,
-												 associated_table_prefix,
-												 &chunk_sizing_info,
+												 timeDimensionInfo,
+												 spaceDimensionInfo,
+												 associatedSchemaName,
+												 associatedTablePrefix,
+												 &chunkSizingInfo,
 												 replicationFactor,
-												 data_nodes);
+												 dataNodeList);
 
 		Assert(created);
-		hypertable = ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_NONE, &hcache);
-		if (NULL != space_dim_info)
-			ts_hypertable_check_partitioning(hypertable, space_dim_info->dimension_id);
+
+		hypertable = ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_NONE, &cache);
+		if (NULL != spaceDimensionInfo)
+			ts_hypertable_check_partitioning(hypertable, spaceDimensionInfo->dimension_id);
 	}
 
-	result = create_hypertable_datum(fcinfo, hypertable, created);
+	Datum result = create_hypertable_datum(fcinfo, hypertable, created);
 
-	ts_cache_release(hcache);
+	ts_cache_release(cache);
 
 	PG_RETURN_DATUM(result);
 }
 
-Datum
-ts_hypertable_create(PG_FUNCTION_ARGS) {
+Datum ts_hypertable_create(PG_FUNCTION_ARGS) {
 	return ts_hypertable_create_internal(fcinfo, false);
 }
 
-Datum
-ts_hypertable_distributed_create(PG_FUNCTION_ARGS) {
+Datum ts_hypertable_distributed_create(PG_FUNCTION_ARGS) {
 	return ts_hypertable_create_internal(fcinfo, true);
 }
 
 /* Creates a new hypertable.
- *
  * Flags are one of HypertableCreateFlags.
  * All parameters after tim_dim_info can be NUL
- * returns 'true' if new hypertable was created, false if 'if_not_exists' and the hypertable already
- * exists.
+ * returns 'true' if new hypertable was created, false if 'if_not_exists' and the hypertable already exists.
  */
-bool
-ts_hypertable_create_from_info(Oid table_relid, int32 hypertable_id, uint32 flags,
-							   DimensionInfo *time_dim_info, DimensionInfo *space_dim_info,
-							   Name associated_schema_name, Name associated_table_prefix,
-							   ChunkSizingInfo *chunk_sizing_info, int16 replication_factor,
-							   List *data_node_names) {
-	Cache *hcache;
+bool ts_hypertable_create_from_info(Oid table_relid,
+									int32 hypertable_id,
+									uint32 flags,
+									DimensionInfo *time_dim_info,
+									DimensionInfo *space_dim_info,
+									Name associated_schema_name,
+									Name associated_table_prefix,
+									ChunkSizingInfo *chunk_sizing_info,
+									int16 replication_factor,
+									List *data_node_names) {
 	Hypertable *ht;
 	Oid associated_schema_oid;
 	Oid user_oid = GetUserId();
@@ -1967,8 +1937,7 @@ ts_hypertable_create_from_info(Oid table_relid, int32 hypertable_id, uint32 flag
 							"production deployments")));
 			time_dim_info->adaptive_chunking = true;
 		}
-	}
-	else {
+	} else {
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("chunk sizing function cannot be NULL")));
@@ -1997,6 +1966,8 @@ ts_hypertable_create_from_info(Oid table_relid, int32 hypertable_id, uint32 flag
 					  DIMENSION_INFO_IS_SET(space_dim_info) ? 2 : 1,
 					  false,
 					  replication_factor);
+
+	Cache *hcache;
 
 	/* Get the a Hypertable object via the cache */
 	time_dim_info->ht =
@@ -2047,14 +2018,14 @@ ts_hypertable_create_from_info(Oid table_relid, int32 hypertable_id, uint32 flag
 	if ((flags & HYPERTABLE_CREATE_DISABLE_DEFAULT_INDEXES) == 0)
 		ts_indexing_create_default_indexes(ht);
 
-	if (replication_factor > 0)
+	if (replication_factor > 0) {
 		ts_cm_functions->hypertable_make_distributed(ht, data_node_names);
-	else if (list_length(data_node_names) > 0)
+	} else if (list_length(data_node_names) > 0) {
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid replication factor"),
-				 errhint("The replication factor should be 1 or greater with a non-empty data node "
-						 "list.")));
+				 errhint("The replication factor should be 1 or greater with a non-empty data node list.")));
+	}
 
 	ts_cache_release(hcache);
 
@@ -2101,8 +2072,7 @@ hypertable_rename_schema_name(TupleInfo *ti, void *data) {
 }
 
 /* Go through internal hypertable table and rename all matching schemas */
-void
-ts_hypertables_rename_schema_name(const char *old_name, const char *new_name) {
+void ts_hypertables_rename_schema_name(const char *old_name, const char *new_name) {
 	const char *schema_names[2] = { old_name, new_name };
 	Catalog *catalog = ts_catalog_get();
 
@@ -2118,15 +2088,13 @@ ts_hypertables_rename_schema_name(const char *old_name, const char *new_name) {
 	ts_scanner_scan(&scanctx);
 }
 
-typedef struct AccumHypertable
-{
+typedef struct AccumHypertable {
 	List *ht_oids;
 	Name schema_name;
 	Name table_name;
 } AccumHypertable;
 
-bool
-ts_is_partitioning_column(const Hypertable *ht, Index column_attno) {
+bool ts_is_partitioning_column(const Hypertable *ht, Index column_attno) {
 	uint16 i;
 
 	for (i = 0; i < ht->space->num_dimensions; i++) {
@@ -2181,8 +2149,7 @@ integer_now_func_validate(Oid now_func_oid, Oid open_dim_type) {
 
 TS_FUNCTION_INFO_V1(ts_hypertable_set_integer_now_func);
 
-Datum
-ts_hypertable_set_integer_now_func(PG_FUNCTION_ARGS) {
+Datum ts_hypertable_set_integer_now_func(PG_FUNCTION_ARGS) {
 	Oid table_relid = PG_GETARG_OID(0);
 	Oid now_func_oid = PG_GETARG_OID(1);
 	bool replace_if_exists = PG_GETARG_BOOL(2);
@@ -2242,8 +2209,7 @@ ts_hypertable_set_integer_now_func(PG_FUNCTION_ARGS) {
 /*Assume permissions are already checked
  * set compression state as enabled
  */
-bool
-ts_hypertable_set_compressed(Hypertable *ht, int32 compressed_hypertable_id) {
+bool ts_hypertable_set_compressed(Hypertable *ht, int32 compressed_hypertable_id) {
 	Assert(!TS_HYPERTABLE_IS_INTERNAL_COMPRESSION_TABLE(ht));
 	ht->fd.compression_state = HypertableCompressionEnabled;
 	/* distr. hypertables do not have a internal compression table
@@ -2257,8 +2223,7 @@ ts_hypertable_set_compressed(Hypertable *ht, int32 compressed_hypertable_id) {
 /* set compression_state as disabled and remove any
  * associated compressed hypertable id
  */
-bool
-ts_hypertable_unset_compressed(Hypertable *ht) {
+bool ts_hypertable_unset_compressed(Hypertable *ht) {
 	Assert(!TS_HYPERTABLE_IS_INTERNAL_COMPRESSION_TABLE(ht));
 	ht->fd.compression_state = HypertableCompressionOff;
 	ht->fd.compressed_hypertable_id = INVALID_HYPERTABLE_ID;
@@ -2273,8 +2238,7 @@ ts_hypertable_unset_compressed(Hypertable *ht) {
  * NOTE:
  * compressed hypertable has no dimensions.
  */
-bool
-ts_hypertable_create_compressed(Oid table_relid, int32 hypertable_id) {
+bool ts_hypertable_create_compressed(Oid table_relid, int32 hypertable_id) {
 	Oid user_oid = GetUserId();
 	Oid tspc_oid = get_rel_tablespace(table_relid);
 	NameData schema_name, table_name, associated_schema_name;
@@ -2496,8 +2460,7 @@ ts_hypertable_get_type(const Hypertable *ht) {
 	return HYPERTABLE_DISTRIBUTED;
 }
 
-void
-ts_hypertable_func_call_on_data_nodes(const Hypertable *ht, FunctionCallInfo fcinfo) {
+void ts_hypertable_func_call_on_data_nodes(const Hypertable *ht, FunctionCallInfo fcinfo) {
 	if (hypertable_is_distributed(ht))
 		ts_cm_functions->func_call_on_data_nodes(fcinfo, ts_hypertable_get_data_node_name_list(ht));
 }
@@ -2505,8 +2468,7 @@ ts_hypertable_func_call_on_data_nodes(const Hypertable *ht, FunctionCallInfo fci
 /*
  * Get the max value of an open dimension.
  */
-Datum
-ts_hypertable_get_open_dim_max_value(const Hypertable *ht, int dimension_index, bool *isnull) {
+Datum ts_hypertable_get_open_dim_max_value(const Hypertable *ht, int dimension_index, bool *isnull) {
 	StringInfo command;
 	const Dimension *dim;
 	int res;
@@ -2549,8 +2511,7 @@ ts_hypertable_get_open_dim_max_value(const Hypertable *ht, int dimension_index, 
 	return maxdat;
 }
 
-bool
-ts_hypertable_has_compression_table(const Hypertable *ht) {
+bool ts_hypertable_has_compression_table(const Hypertable *ht) {
 	if (ht->fd.compressed_hypertable_id != INVALID_HYPERTABLE_ID) {
 		Assert(ht->fd.compression_state == HypertableCompressionEnabled);
 		return true;

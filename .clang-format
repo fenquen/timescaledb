@@ -15,7 +15,8 @@ AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 # AlwaysBreakAfterDefinitionReturnType: None # option is deprecated
-AlwaysBreakAfterReturnType: AllDefinitions
+# 函数总是在返回的类型之后换1行
+AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
 AlwaysBreakTemplateDeclarations: MultiLine
 BinPackArguments: false
@@ -23,15 +24,15 @@ BinPackParameters: true
 BraceWrapping:
   AfterClass:      true
   AfterControlStatement: Never
-  AfterEnum:       true
+  AfterEnum:       false # enum之后的括号换行
   AfterFunction:   false
   AfterNamespace:  true
   AfterObjCDeclaration: true
-  AfterStruct:     true
+  AfterStruct:     false # struct之后的括号换行
   AfterUnion:      true
   AfterExternBlock: true
   BeforeCatch:     true
-  BeforeElse:      true
+  BeforeElse:      false
   IndentBraces:    false
   SplitEmptyFunction: true
   SplitEmptyRecord: true
@@ -45,7 +46,7 @@ BreakConstructorInitializersBeforeComma: false
 BreakConstructorInitializers: BeforeColon
 BreakAfterJavaFieldAnnotations: false # N/A Java
 BreakStringLiterals: true
-ColumnLimit:     100
+ColumnLimit:     0
 CommentPragmas:  '^ TS Pragma:' #For future proofing
 CompactNamespaces: false # N/A c++
 ConstructorInitializerAllOnOneLineOrOnePerLine: false # N/A C++

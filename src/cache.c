@@ -10,20 +10,17 @@
 #include "cache.h"
 #include "compat/compat.h"
 
-/* List of pinned caches. A cache occurs once in this list for every pin
- * taken */
+/* List of pinned caches. A cache occurs once in this list for every pin taken */
 static List *pinned_caches = NIL;
 static MemoryContext pinned_caches_mctx = NULL;
 
-typedef struct CachePin
-{
+typedef struct CachePin {
 	Cache *cache;
 	SubTransactionId subtxnid;
 } CachePin;
 
 static void
-cache_reset_pinned_caches(void)
-{
+cache_reset_pinned_caches(void) {
 	if (NULL != pinned_caches_mctx)
 		MemoryContextDelete(pinned_caches_mctx);
 
@@ -33,11 +30,8 @@ cache_reset_pinned_caches(void)
 	pinned_caches = NIL;
 }
 
-void
-ts_cache_init(Cache *cache)
-{
-	if (cache->htab != NULL)
-	{
+void ts_cache_init(Cache *cache) {
+	if (cache->htab != NULL) {
 		elog(ERROR, "cache %s is already initialized", cache->name);
 		return;
 	}
@@ -48,17 +42,15 @@ ts_cache_init(Cache *cache)
 	 */
 	Assert(MemoryContextContains(ts_cache_memory_ctx(cache), cache));
 
-	cache->htab = hash_create(cache->name, cache->numelements, &cache->hctl, cache->flags);
+	cache->htab = hash_create(cache->name, cache->numelements, &cache->hashctl, cache->flags);
 	cache->refcount = 1;
 	cache->handle_txn_callbacks = true;
 	cache->release_on_commit = true;
 }
 
 static void
-cache_destroy(Cache *cache)
-{
-	if (cache->refcount > 0)
-	{
+cache_destroy(Cache *cache) {
+	if (cache->refcount > 0) {
 		/* will be destroyed later */
 		return;
 	}
@@ -67,12 +59,10 @@ cache_destroy(Cache *cache)
 		cache->pre_destroy_hook(cache);
 
 	hash_destroy(cache->htab);
-	MemoryContextDelete(cache->hctl.hcxt);
+	MemoryContextDelete(cache->hashctl.hcxt);
 }
 
-void
-ts_cache_invalidate(Cache *cache)
-{
+void ts_cache_invalidate(Cache *cache) {
 	if (cache == NULL)
 		return;
 	cache->refcount--;
@@ -89,35 +79,34 @@ ts_cache_invalidate(Cache *cache)
  * Each call to cache_pin MUST BE paired with a call to cache_release.
  *
  */
-Cache *
-ts_cache_pin(Cache *cache)
-{
+Cache *ts_cache_pin(Cache *cache) {
 	MemoryContext old = MemoryContextSwitchTo(pinned_caches_mctx);
-	CachePin *cp = palloc(sizeof(CachePin));
+	CachePin *cachePin = palloc(sizeof(CachePin));
 
-	cp->cache = cache;
-	cp->subtxnid = GetCurrentSubTransactionId();
-	if (cache->handle_txn_callbacks)
-		pinned_caches = lappend(pinned_caches, cp);
+	cachePin->cache = cache;
+	cachePin->subtxnid = GetCurrentSubTransactionId();
+	if (cache->handle_txn_callbacks) {
+		pinned_caches = lappend(pinned_caches, cachePin);
+	}
+
 	MemoryContextSwitchTo(old);
+
 	cache->refcount++;
+
 	return cache;
 }
 
 static void
-remove_pin(Cache *cache, SubTransactionId subtxnid)
-{
+remove_pin(Cache *cache, SubTransactionId subtxnid) {
 	ListCell *lc;
 #if PG13_LT
 	ListCell *prev = NULL;
 #endif
 
-	foreach (lc, pinned_caches)
-	{
+	foreach (lc, pinned_caches) {
 		CachePin *cp = lfirst(lc);
 
-		if (cp->cache == cache && cp->subtxnid == subtxnid)
-		{
+		if (cp->cache == cache && cp->subtxnid == subtxnid) {
 			pinned_caches = list_delete_cell_compat(pinned_caches, lc, prev);
 			pfree(cp);
 			return;
@@ -133,8 +122,7 @@ remove_pin(Cache *cache, SubTransactionId subtxnid)
 }
 
 static int
-cache_release_subtxn(Cache *cache, SubTransactionId subtxnid)
-{
+cache_release_subtxn(Cache *cache, SubTransactionId subtxnid) {
 	int refcount = cache->refcount - 1;
 
 	Assert(cache->refcount > 0);
@@ -147,72 +135,68 @@ cache_release_subtxn(Cache *cache, SubTransactionId subtxnid)
 	return refcount;
 }
 
-int
-ts_cache_release(Cache *cache)
-{
+int ts_cache_release(Cache *cache) {
 	return cache_release_subtxn(cache, GetCurrentSubTransactionId());
 }
 
 MemoryContext
-ts_cache_memory_ctx(Cache *cache)
-{
-	return cache->hctl.hcxt;
+ts_cache_memory_ctx(Cache *cache) {
+	return cache->hashctl.hcxt;
 }
 
-void *
-ts_cache_fetch(Cache *cache, CacheQuery *query)
-{
-	HASHACTION action;
-	bool found;
-
-	if (cache->htab == NULL || cache->valid_result == NULL)
+void *ts_cache_fetch(Cache *cache, CacheQuery *cacheQuery) {
+	if (cache->htab == NULL || cache->valid_result == NULL) {
 		elog(ERROR, "cache \"%s\" is not initialized", cache->name);
+	}
 
-	if (query->flags & CACHE_FLAG_NOCREATE)
-		action = HASH_FIND;
-	else if (cache->create_entry == NULL)
+	HASHACTION hashaction;
+	if (cacheQuery->flags & CACHE_FLAG_NOCREATE) {
+		hashaction = HASH_FIND;
+	} else if (cache->create_entry == NULL) {
 		elog(ERROR, "cache \"%s\" does not support creating new entries", cache->name);
-	else
-		action = HASH_ENTER;
+	} else {
+		hashaction = HASH_ENTER;
+	}
 
-	query->result = hash_search(cache->htab, cache->get_key(query), action, &found);
+	bool found;
+	cacheQuery->result = hash_search(cache->htab,
+									 cache->get_key(cacheQuery), // hypertable_cache_get_key 其实是目标表的oid
+									 hashaction,
+									 &found);
 
-	if (found)
-	{
+	if (found) {
 		cache->stats.hits++;
 
-		if (cache->update_entry != NULL)
-			query->result = cache->update_entry(cache, query);
-	}
-	else
-	{
+		if (cache->update_entry != NULL) {
+			cacheQuery->result = cache->update_entry(cache, cacheQuery);
+		}
+	} else {
 		cache->stats.misses++;
 
-		if (action == HASH_ENTER)
-		{
+		// 没有找到 && HASH_ENTER 会生成entry
+		if (hashaction == HASH_ENTER) {
 			cache->stats.numelements++;
-			query->result = cache->create_entry(cache, query);
+			// hypertable_cache_create_entry
+			cacheQuery->result = cache->create_entry(cache, cacheQuery);
 		}
 	}
 
-	if (!(query->flags & CACHE_FLAG_MISSING_OK) && !cache->valid_result(query->result))
-	{
-		if (cache->missing_error != NULL)
-			cache->missing_error(cache, query);
-		else
+	// 不能容忍找不到
+	if (!(cacheQuery->flags & CACHE_FLAG_MISSING_OK) && !cache->valid_result(cacheQuery->result)) {
+		if (cache->missing_error != NULL) {
+			cache->missing_error(cache, cacheQuery);
+		} else {
 			elog(ERROR, "failed to find entry in cache \"%s\"", cache->name);
+		}
 	}
 
-	return query->result;
+	return cacheQuery->result;
 }
 
-bool
-ts_cache_remove(Cache *cache, void *key)
-{
+bool ts_cache_remove(Cache *cache, void *key) {
 	bool found;
 
-	if (cache->remove_entry != NULL)
-	{
+	if (cache->remove_entry != NULL) {
 		/* In case we want to free the removing entry we must do it beforehand
 		 * because HASH_REMOVE call returns dangling pointer, which cannot be used */
 		void *entry = hash_search(cache->htab, key, HASH_FIND, &found);
@@ -228,16 +212,14 @@ ts_cache_remove(Cache *cache, void *key)
 }
 
 static void
-release_all_pinned_caches()
-{
+release_all_pinned_caches() {
 	ListCell *lc;
 
 	/*
 	 * release once for every occurrence of a cache in the pinned caches list.
 	 * On abort, release irrespective of cache->release_on_commit.
 	 */
-	foreach (lc, pinned_caches)
-	{
+	foreach (lc, pinned_caches) {
 		CachePin *cp = lfirst(lc);
 
 		cp->cache->refcount--;
@@ -248,20 +230,17 @@ release_all_pinned_caches()
 }
 
 static void
-release_subtxn_pinned_caches(SubTransactionId subtxnid, bool abort)
-{
+release_subtxn_pinned_caches(SubTransactionId subtxnid, bool abort) {
 	ListCell *lc;
 
 	/* Need a copy because cache_release will modify pinned_caches */
 	List *pinned_caches_copy = list_copy(pinned_caches);
 
 	/* Only release caches created in subtxn */
-	foreach (lc, pinned_caches_copy)
-	{
+	foreach (lc, pinned_caches_copy) {
 		CachePin *cp = lfirst(lc);
 
-		if (cp->subtxnid == subtxnid)
-		{
+		if (cp->subtxnid == subtxnid) {
 			/*
 			 * This assert makes sure that that we don't have a cache leak
 			 * when running with debugging
@@ -286,16 +265,13 @@ release_subtxn_pinned_caches(SubTransactionId subtxnid, bool abort)
  * of a non-aborted transaction unless cache->release_on_commit is set to true.
  * */
 static void
-cache_xact_end(XactEvent event, void *arg)
-{
-	switch (event)
-	{
+cache_xact_end(XactEvent event, void *arg) {
+	switch (event) {
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
 			release_all_pinned_caches();
 			break;
-		default:
-		{
+		default: {
 			/*
 			 * Make a copy of the list of pinned caches since
 			 * ts_cache_release() can manipulate the original list.
@@ -306,8 +282,7 @@ cache_xact_end(XactEvent event, void *arg)
 			/*
 			 * Only caches left should be marked as non-released
 			 */
-			foreach (lc, pinned_caches_copy)
-			{
+			foreach (lc, pinned_caches_copy) {
 				CachePin *cp = lfirst(lc);
 
 				/*
@@ -325,15 +300,13 @@ cache_xact_end(XactEvent event, void *arg)
 			}
 
 			list_free(pinned_caches_copy);
-		}
-		break;
+		} break;
 	}
 }
 
 static void
 cache_subxact_abort(SubXactEvent event, SubTransactionId subtxn_id, SubTransactionId parentSubid,
-					void *arg)
-{
+					void *arg) {
 	/*
 	 * Note that cache->release_on_commit is irrelevant here since can't have
 	 * cross-commit operations in subtxns
@@ -344,8 +317,7 @@ cache_subxact_abort(SubXactEvent event, SubTransactionId subtxn_id, SubTransacti
 	 * same subtxn.
 	 */
 
-	switch (event)
-	{
+	switch (event) {
 		case SUBXACT_EVENT_START_SUB:
 		case SUBXACT_EVENT_PRE_COMMIT_SUB:
 			/* do nothing */
@@ -359,17 +331,13 @@ cache_subxact_abort(SubXactEvent event, SubTransactionId subtxn_id, SubTransacti
 	}
 }
 
-void
-_cache_init(void)
-{
+void _cache_init(void) {
 	cache_reset_pinned_caches();
 	RegisterXactCallback(cache_xact_end, NULL);
 	RegisterSubXactCallback(cache_subxact_abort, NULL);
 }
 
-void
-_cache_fini(void)
-{
+void _cache_fini(void) {
 	release_all_pinned_caches();
 	MemoryContextDelete(pinned_caches_mctx);
 	pinned_caches_mctx = NULL;

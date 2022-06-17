@@ -17,8 +17,7 @@
 
 #include "scanner.h"
 
-enum ScannerType
-{
+enum ScannerType {
 	ScannerTypeTable,
 	ScannerTypeIndex,
 };
@@ -26,8 +25,7 @@ enum ScannerType
 /*
  * Scanner can implement both index and heap scans in a single interface.
  */
-typedef struct Scanner
-{
+typedef struct Scanner {
 	Relation (*openscan)(ScannerCtx *ctx);
 	ScanDesc (*beginscan)(ScannerCtx *ctx);
 	bool (*getnext)(ScannerCtx *ctx);
@@ -38,15 +36,13 @@ typedef struct Scanner
 
 /* Functions implementing heap scans */
 static Relation
-table_scanner_open(ScannerCtx *ctx)
-{
+table_scanner_open(ScannerCtx *ctx) {
 	ctx->tablerel = table_open(ctx->table, ctx->lockmode);
 	return ctx->tablerel;
 }
 
 static ScanDesc
-table_scanner_beginscan(ScannerCtx *ctx)
-{
+table_scanner_beginscan(ScannerCtx *ctx) {
 	ctx->internal.scan.table_scan =
 		table_beginscan(ctx->tablerel, ctx->snapshot, ctx->nkeys, ctx->scankey);
 
@@ -54,8 +50,7 @@ table_scanner_beginscan(ScannerCtx *ctx)
 }
 
 static bool
-table_scanner_getnext(ScannerCtx *ctx)
-{
+table_scanner_getnext(ScannerCtx *ctx) {
 	bool success = table_scan_getnextslot(ctx->internal.scan.table_scan,
 										  ForwardScanDirection,
 										  ctx->internal.tinfo.slot);
@@ -64,20 +59,17 @@ table_scanner_getnext(ScannerCtx *ctx)
 }
 
 static void
-table_scanner_rescan(ScannerCtx *ctx)
-{
+table_scanner_rescan(ScannerCtx *ctx) {
 	table_rescan(ctx->internal.scan.table_scan, ctx->scankey);
 }
 
 static void
-table_scanner_endscan(ScannerCtx *ctx)
-{
+table_scanner_endscan(ScannerCtx *ctx) {
 	table_endscan(ctx->internal.scan.table_scan);
 }
 
 static void
-table_scanner_close(ScannerCtx *ctx)
-{
+table_scanner_close(ScannerCtx *ctx) {
 	LOCKMODE lockmode = (ctx->flags & SCANNER_F_KEEPLOCK) ? NoLock : ctx->lockmode;
 
 	table_close(ctx->tablerel, lockmode);
@@ -85,16 +77,14 @@ table_scanner_close(ScannerCtx *ctx)
 
 /* Functions implementing index scans */
 static Relation
-index_scanner_open(ScannerCtx *ctx)
-{
+index_scanner_open(ScannerCtx *ctx) {
 	ctx->tablerel = table_open(ctx->table, ctx->lockmode);
 	ctx->indexrel = index_open(ctx->index, ctx->lockmode);
 	return ctx->indexrel;
 }
 
 static ScanDesc
-index_scanner_beginscan(ScannerCtx *ctx)
-{
+index_scanner_beginscan(ScannerCtx *ctx) {
 	InternalScannerCtx *ictx = &ctx->internal;
 
 	ictx->scan.index_scan =
@@ -105,33 +95,27 @@ index_scanner_beginscan(ScannerCtx *ctx)
 }
 
 static bool
-index_scanner_getnext(ScannerCtx *ctx)
-{
-	InternalScannerCtx *ictx = &ctx->internal;
-	bool success;
-
-	success = index_getnext_slot(ictx->scan.index_scan, ctx->scandirection, ictx->tinfo.slot);
-	ictx->tinfo.ituple = ictx->scan.index_scan->xs_itup;
-	ictx->tinfo.ituple_desc = ictx->scan.index_scan->xs_itupdesc;
+index_scanner_getnext(ScannerCtx *scannerCtx) {
+	InternalScannerCtx *internalScannerCtx = &scannerCtx->internal;
+	bool success = index_getnext_slot(internalScannerCtx->scan.index_scan, scannerCtx->scandirection, internalScannerCtx->tinfo.slot);
+	internalScannerCtx->tinfo.ituple = internalScannerCtx->scan.index_scan->xs_itup;
+	internalScannerCtx->tinfo.ituple_desc = internalScannerCtx->scan.index_scan->xs_itupdesc;
 
 	return success;
 }
 
 static void
-index_scanner_rescan(ScannerCtx *ctx)
-{
+index_scanner_rescan(ScannerCtx *ctx) {
 	index_rescan(ctx->internal.scan.index_scan, ctx->scankey, ctx->nkeys, NULL, ctx->norderbys);
 }
 
 static void
-index_scanner_endscan(ScannerCtx *ctx)
-{
+index_scanner_endscan(ScannerCtx *ctx) {
 	index_endscan(ctx->internal.scan.index_scan);
 }
 
 static void
-index_scanner_close(ScannerCtx *ctx)
-{
+index_scanner_close(ScannerCtx *ctx) {
 	LOCKMODE lockmode = (ctx->flags & SCANNER_F_KEEPLOCK) ? NoLock : ctx->lockmode;
 	index_close(ctx->indexrel, ctx->lockmode);
 	table_close(ctx->tablerel, lockmode);
@@ -159,18 +143,16 @@ static Scanner scanners[] = {
 	}
 };
 
-static inline Scanner *
-scanner_ctx_get_scanner(ScannerCtx *ctx)
-{
-	if (OidIsValid(ctx->index))
+static inline Scanner *scanner_ctx_get_scanner(ScannerCtx *ctx) {
+	if (OidIsValid(ctx->index)) {
 		return &scanners[ScannerTypeIndex];
-	else
-		return &scanners[ScannerTypeTable];
+	}
+
+	return &scanners[ScannerTypeTable];
 }
 
 TSDLLEXPORT void
-ts_scanner_rescan(ScannerCtx *ctx, const ScanKey scankey)
-{
+ts_scanner_rescan(ScannerCtx *ctx, const ScanKey scankey) {
 	Scanner *scanner = scanner_ctx_get_scanner(ctx);
 	MemoryContext oldmcxt;
 
@@ -185,16 +167,14 @@ ts_scanner_rescan(ScannerCtx *ctx, const ScanKey scankey)
 }
 
 static void
-prepare_scan(ScannerCtx *ctx)
-{
+prepare_scan(ScannerCtx *ctx) {
 	ctx->internal.ended = false;
 	ctx->internal.registered_snapshot = false;
 
 	if (ctx->internal.scan_mcxt == NULL)
 		ctx->internal.scan_mcxt = CurrentMemoryContext;
 
-	if (ctx->snapshot == NULL)
-	{
+	if (ctx->snapshot == NULL) {
 		/*
 		 * We use SnapshotSelf by default, for historical reasons mostly, but
 		 * we probably want to move to an MVCC snapshot as the default. The
@@ -226,22 +206,20 @@ prepare_scan(ScannerCtx *ctx)
 	}
 }
 
-TSDLLEXPORT Relation
-ts_scanner_open(ScannerCtx *ctx)
-{
-	Scanner *scanner = scanner_ctx_get_scanner(ctx);
-	MemoryContext oldmcxt;
-	Relation rel;
+TSDLLEXPORT Relation ts_scanner_open(ScannerCtx *scannerCtx) {
+	Scanner *scanner = scanner_ctx_get_scanner(scannerCtx);
 
-	Assert(NULL == ctx->tablerel);
+	Assert(NULL == scannerCtx->tablerel);
 
-	prepare_scan(ctx);
-	Assert(ctx->internal.scan_mcxt != NULL);
-	oldmcxt = MemoryContextSwitchTo(ctx->internal.scan_mcxt);
-	rel = scanner->openscan(ctx);
+	prepare_scan(scannerCtx);
+
+	Assert(scannerCtx->internal.scan_mcxt != NULL);
+
+	MemoryContext oldmcxt = MemoryContextSwitchTo(scannerCtx->internal.scan_mcxt);
+	Relation relation = scanner->openscan(scannerCtx);
 	MemoryContextSwitchTo(oldmcxt);
 
-	return rel;
+	return relation;
 }
 
 /*
@@ -249,94 +227,78 @@ ts_scanner_open(ScannerCtx *ctx)
  * ScannerCtx. ScannerCtx must be setup by caller with the proper information
  * for the scan, including filters and callbacks for found tuples.
  */
-TSDLLEXPORT void
-ts_scanner_start_scan(ScannerCtx *ctx)
-{
-	InternalScannerCtx *ictx = &ctx->internal;
-	Scanner *scanner;
-	TupleDesc tuple_desc;
-	MemoryContext oldmcxt;
+TSDLLEXPORT void ts_scanner_start_scan(ScannerCtx *scannerCtx) {
+	InternalScannerCtx *internalScannerCtx = &scannerCtx->internal;
 
-	if (ictx->started)
-	{
-		Assert(!ictx->ended);
-		Assert(ctx->tablerel);
-		Assert(OidIsValid(ctx->table));
+	if (internalScannerCtx->started) {
+		Assert(!internalScannerCtx->ended);
+		Assert(scannerCtx->tablerel);
+		Assert(OidIsValid(scannerCtx->table));
 		return;
 	}
 
-	if (ctx->tablerel == NULL)
-	{
-		Assert(NULL == ctx->indexrel);
-		ts_scanner_open(ctx);
-	}
-	else
-	{
+	if (scannerCtx->tablerel == NULL) {
+		Assert(NULL == scannerCtx->indexrel);
+		ts_scanner_open(scannerCtx);
+	} else {
 		/*
 		 * Relations already opened by caller: Only need to prepare the scan
 		 * and set relation Oids so that the scanner knows which scanner
 		 * implementation to use. Respect the auto-closing behavior set by the
 		 * user, which is to auto close if unspecified.
 		 */
-		prepare_scan(ctx);
-		ctx->table = RelationGetRelid(ctx->tablerel);
+		prepare_scan(scannerCtx);
+		scannerCtx->table = RelationGetRelid(scannerCtx->tablerel);
 
-		if (NULL != ctx->indexrel)
-			ctx->index = RelationGetRelid(ctx->indexrel);
+		if (NULL != scannerCtx->indexrel)
+			scannerCtx->index = RelationGetRelid(scannerCtx->indexrel);
 	}
 
-	Assert(ctx->internal.scan_mcxt != NULL);
-	oldmcxt = MemoryContextSwitchTo(ctx->internal.scan_mcxt);
+	Assert(scannerCtx->internal.scan_mcxt != NULL);
+	MemoryContext oldmcxt = MemoryContextSwitchTo(scannerCtx->internal.scan_mcxt);
 
-	scanner = scanner_ctx_get_scanner(ctx);
-	scanner->beginscan(ctx);
+	Scanner *scanner = scanner_ctx_get_scanner(scannerCtx);
+	scanner->beginscan(scannerCtx);
 
-	tuple_desc = RelationGetDescr(ctx->tablerel);
+	TupleDesc tuple_desc = RelationGetDescr(scannerCtx->tablerel);
 
-	ictx->tinfo.scanrel = ctx->tablerel;
-	ictx->tinfo.mctx = ctx->result_mctx == NULL ? CurrentMemoryContext : ctx->result_mctx;
-	ictx->tinfo.slot = MakeSingleTupleTableSlot(tuple_desc, table_slot_callbacks(ctx->tablerel));
+	internalScannerCtx->tinfo.scanrel = scannerCtx->tablerel;
+	internalScannerCtx->tinfo.mctx = scannerCtx->result_mctx == NULL ? CurrentMemoryContext : scannerCtx->result_mctx;
+	internalScannerCtx->tinfo.slot = MakeSingleTupleTableSlot(tuple_desc, table_slot_callbacks(scannerCtx->tablerel));
 	MemoryContextSwitchTo(oldmcxt);
 
 	/* Call pre-scan handler, if any. */
-	if (ctx->prescan != NULL)
-		ctx->prescan(ctx->data);
+	if (scannerCtx->prescan != NULL)
+		scannerCtx->prescan(scannerCtx->data);
 
-	ictx->started = true;
+	internalScannerCtx->started = true;
 }
 
-static inline bool
-ts_scanner_limit_reached(ScannerCtx *ctx)
-{
+static inline bool ts_scanner_limit_reached(ScannerCtx *ctx) {
 	return ctx->limit > 0 && ctx->internal.tinfo.count >= ctx->limit;
 }
 
 static void
-scanner_cleanup(ScannerCtx *ctx)
-{
+scanner_cleanup(ScannerCtx *ctx) {
 	InternalScannerCtx *ictx = &ctx->internal;
 
-	if (ictx->registered_snapshot)
-	{
+	if (ictx->registered_snapshot) {
 		UnregisterSnapshot(ctx->snapshot);
 		ctx->snapshot = NULL;
 	}
 
-	if (NULL != ictx->tinfo.slot)
-	{
+	if (NULL != ictx->tinfo.slot) {
 		ExecDropSingleTupleTableSlot(ictx->tinfo.slot);
 		ictx->tinfo.slot = NULL;
 	}
 
-	if (NULL != ictx->scan_mcxt)
-	{
+	if (NULL != ictx->scan_mcxt) {
 		ictx->scan_mcxt = NULL;
 	}
 }
 
 TSDLLEXPORT void
-ts_scanner_end_scan(ScannerCtx *ctx)
-{
+ts_scanner_end_scan(ScannerCtx *ctx) {
 	InternalScannerCtx *ictx = &ctx->internal;
 	Scanner *scanner = scanner_ctx_get_scanner(ctx);
 	MemoryContext oldmcxt;
@@ -358,122 +320,106 @@ ts_scanner_end_scan(ScannerCtx *ctx)
 }
 
 TSDLLEXPORT void
-ts_scanner_close(ScannerCtx *ctx)
-{
+ts_scanner_close(ScannerCtx *ctx) {
 	Scanner *scanner = scanner_ctx_get_scanner(ctx);
 
 	Assert(ctx->internal.ended);
 
-	if (NULL != ctx->tablerel)
-	{
+	if (NULL != ctx->tablerel) {
 		scanner->closescan(ctx);
 		ctx->tablerel = NULL;
 		ctx->indexrel = NULL;
 	}
 }
 
-TSDLLEXPORT TupleInfo *
-ts_scanner_next(ScannerCtx *ctx)
-{
-	InternalScannerCtx *ictx = &ctx->internal;
-	Scanner *scanner = scanner_ctx_get_scanner(ctx);
-	bool is_valid = false;
+TSDLLEXPORT TupleInfo *ts_scanner_next(ScannerCtx *scannerCtx) {
+	InternalScannerCtx *internalScannerCtx = &scannerCtx->internal;
+	Scanner *scanner = scanner_ctx_get_scanner(scannerCtx);
+	bool isValid = false;
 
-	if (!ts_scanner_limit_reached(ctx))
-	{
-		MemoryContext oldmcxt = MemoryContextSwitchTo(ctx->internal.scan_mcxt);
-		is_valid = scanner->getnext(ctx);
+	if (!ts_scanner_limit_reached(scannerCtx)) {
+		MemoryContext oldmcxt = MemoryContextSwitchTo(scannerCtx->internal.scan_mcxt);
+		isValid = scanner->getnext(scannerCtx);
 		MemoryContextSwitchTo(oldmcxt);
 	}
 
-	while (is_valid)
-	{
-		if (ctx->filter == NULL || ctx->filter(&ictx->tinfo, ctx->data) == SCAN_INCLUDE)
-		{
-			ictx->tinfo.count++;
+	while (isValid) {
+		if (scannerCtx->filter == NULL || scannerCtx->filter(&internalScannerCtx->tinfo, scannerCtx->data) == SCAN_INCLUDE) {
+			internalScannerCtx->tinfo.count++;
 
-			if (ctx->tuplock)
-			{
-				TupleTableSlot *slot = ictx->tinfo.slot;
+			if (scannerCtx->tuplock) {
+				TupleTableSlot *slot = internalScannerCtx->tinfo.slot;
 
-				Assert(ctx->snapshot);
-				ictx->tinfo.lockresult = table_tuple_lock(ctx->tablerel,
-														  &(slot->tts_tid),
-														  ctx->snapshot,
-														  slot,
-														  GetCurrentCommandId(false),
-														  ctx->tuplock->lockmode,
-														  ctx->tuplock->waitpolicy,
-														  ctx->tuplock->lockflags,
-														  &ictx->tinfo.lockfd);
+				Assert(scannerCtx->snapshot);
+				internalScannerCtx->tinfo.lockresult = table_tuple_lock(scannerCtx->tablerel,
+																		&(slot->tts_tid),
+																		scannerCtx->snapshot,
+																		slot,
+																		GetCurrentCommandId(false),
+																		scannerCtx->tuplock->lockmode,
+																		scannerCtx->tuplock->waitpolicy,
+																		scannerCtx->tuplock->lockflags,
+																		&internalScannerCtx->tinfo.lockfd);
 			}
 
 			/* stop at a valid tuple */
-			return &ictx->tinfo;
+			return &internalScannerCtx->tinfo;
 		}
 
-		if (ts_scanner_limit_reached(ctx))
-			is_valid = false;
-		else
-		{
-			MemoryContext oldmcxt = MemoryContextSwitchTo(ctx->internal.scan_mcxt);
-			is_valid = scanner->getnext(ctx);
+		if (ts_scanner_limit_reached(scannerCtx))
+			isValid = false;
+		else {
+			MemoryContext oldmcxt = MemoryContextSwitchTo(scannerCtx->internal.scan_mcxt);
+			isValid = scanner->getnext(scannerCtx);
 			MemoryContextSwitchTo(oldmcxt);
 		}
 	}
 
-	if (!(ctx->flags & SCANNER_F_NOEND))
-		ts_scanner_end_scan(ctx);
+	if (!(scannerCtx->flags & SCANNER_F_NOEND))
+		ts_scanner_end_scan(scannerCtx);
 
-	if (!(ctx->flags & SCANNER_F_NOEND_AND_NOCLOSE))
-		ts_scanner_close(ctx);
+	if (!(scannerCtx->flags & SCANNER_F_NOEND_AND_NOCLOSE))
+		ts_scanner_close(scannerCtx);
 
 	return NULL;
 }
 
-/*
- * Perform either a heap or index scan depending on the information in the
- * ScannerCtx. ScannerCtx must be setup by caller with the proper information
- * for the scan, including filters and callbacks for found tuples.
- *
- * Return the number of tuples that were found.
+/**
+ * Perform either a heap or index scan depending on the information in the ScannerCtx.<br>
+ * ScannerCtx must be setup by caller with the proper information for the scan, including filters and callbacks for found tuples.
+ * @return the number of tuples that were found
  */
-TSDLLEXPORT int
-ts_scanner_scan(ScannerCtx *ctx)
-{
-	TupleInfo *tinfo;
+TSDLLEXPORT int ts_scanner_scan(ScannerCtx *scannerCtx) {
+	MemSet(&scannerCtx->internal, 0, sizeof(scannerCtx->internal));
 
-	MemSet(&ctx->internal, 0, sizeof(ctx->internal));
+	TupleInfo *tupleInfo;
 
-	for (ts_scanner_start_scan(ctx); (tinfo = ts_scanner_next(ctx));)
-	{
+	for (ts_scanner_start_scan(scannerCtx);
+		 (tupleInfo = ts_scanner_next(scannerCtx));) {
 		/* Call tuple_found handler. Abort the scan if the handler wants us to */
-		if (ctx->tuple_found != NULL && ctx->tuple_found(tinfo, ctx->data) == SCAN_DONE)
-		{
-			if (!(ctx->flags & SCANNER_F_NOEND))
-				ts_scanner_end_scan(ctx);
+		if (scannerCtx->tuple_found != NULL &&
+			scannerCtx->tuple_found(tupleInfo, scannerCtx->data) == SCAN_DONE) {
+			if (!(scannerCtx->flags & SCANNER_F_NOEND))
+				ts_scanner_end_scan(scannerCtx);
 
-			if (!(ctx->flags & SCANNER_F_NOEND_AND_NOCLOSE))
-				ts_scanner_close(ctx);
+			if (!(scannerCtx->flags & SCANNER_F_NOEND_AND_NOCLOSE))
+				ts_scanner_close(scannerCtx);
+
 			break;
 		}
 	}
 
-	return ctx->internal.tinfo.count;
+	return scannerCtx->internal.tinfo.count;
 }
 
-TSDLLEXPORT bool
-ts_scanner_scan_one(ScannerCtx *ctx, bool fail_if_not_found, const char *item_type)
-{
+TSDLLEXPORT bool ts_scanner_scan_one(ScannerCtx *ctx, bool fail_if_not_found, const char *item_type) {
 	int num_found = ts_scanner_scan(ctx);
 
 	ctx->limit = 2;
 
-	switch (num_found)
-	{
+	switch (num_found) {
 		case 0:
-			if (fail_if_not_found)
-			{
+			if (fail_if_not_found) {
 				elog(ERROR, "%s not found", item_type);
 			}
 			return false;
@@ -486,25 +432,21 @@ ts_scanner_scan_one(ScannerCtx *ctx, bool fail_if_not_found, const char *item_ty
 }
 
 ItemPointer
-ts_scanner_get_tuple_tid(TupleInfo *ti)
-{
+ts_scanner_get_tuple_tid(TupleInfo *ti) {
 	return &ti->slot->tts_tid;
 }
 
 HeapTuple
-ts_scanner_fetch_heap_tuple(const TupleInfo *ti, bool materialize, bool *should_free)
-{
+ts_scanner_fetch_heap_tuple(const TupleInfo *ti, bool materialize, bool *should_free) {
 	return ExecFetchSlotHeapTuple(ti->slot, materialize, should_free);
 }
 
 TupleDesc
-ts_scanner_get_tupledesc(const TupleInfo *ti)
-{
+ts_scanner_get_tupledesc(const TupleInfo *ti) {
 	return ti->slot->tts_tupleDescriptor;
 }
 
 void *
-ts_scanner_alloc_result(const TupleInfo *ti, Size size)
-{
+ts_scanner_alloc_result(const TupleInfo *ti, Size size) {
 	return MemoryContextAllocZero(ti->mctx, size);
 }

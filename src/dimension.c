@@ -45,8 +45,7 @@ enum Anum_add_dimension
 #define Natts_add_dimension (_Anum_add_dimension_max - 1)
 
 static int
-cmp_dimension_id(const void *left, const void *right)
-{
+cmp_dimension_id(const void *left, const void *right) {
 	const Dimension *diml = (Dimension *) left;
 	const Dimension *dimr = (Dimension *) right;
 
@@ -60,8 +59,7 @@ cmp_dimension_id(const void *left, const void *right)
 }
 
 const Dimension *
-ts_hyperspace_get_dimension_by_id(const Hyperspace *hs, int32 id)
-{
+ts_hyperspace_get_dimension_by_id(const Hyperspace *hs, int32 id) {
 	Dimension dim = {
 		.fd.id = id,
 	};
@@ -70,12 +68,10 @@ ts_hyperspace_get_dimension_by_id(const Hyperspace *hs, int32 id)
 }
 
 Dimension *
-ts_hyperspace_get_mutable_dimension_by_name(Hyperspace *hs, DimensionType type, const char *name)
-{
+ts_hyperspace_get_mutable_dimension_by_name(Hyperspace *hs, DimensionType type, const char *name) {
 	int i;
 
-	for (i = 0; i < hs->num_dimensions; i++)
-	{
+	for (i = 0; i < hs->num_dimensions; i++) {
 		Dimension *dim = &hs->dimensions[i];
 
 		if ((type == DIMENSION_TYPE_ANY || dim->type == type) &&
@@ -87,20 +83,16 @@ ts_hyperspace_get_mutable_dimension_by_name(Hyperspace *hs, DimensionType type, 
 }
 
 const Dimension *
-ts_hyperspace_get_dimension_by_name(const Hyperspace *hs, DimensionType type, const char *name)
-{
+ts_hyperspace_get_dimension_by_name(const Hyperspace *hs, DimensionType type, const char *name) {
 	return ts_hyperspace_get_mutable_dimension_by_name((Hyperspace *) hs, type, name);
 }
 
 Dimension *
-ts_hyperspace_get_mutable_dimension(Hyperspace *hs, DimensionType type, Index n)
-{
+ts_hyperspace_get_mutable_dimension(Hyperspace *hs, DimensionType type, Index n) {
 	int i;
 
-	for (i = 0; i < hs->num_dimensions; i++)
-	{
-		if (type == DIMENSION_TYPE_ANY || hs->dimensions[i].type == type)
-		{
+	for (i = 0; i < hs->num_dimensions; i++) {
+		if (type == DIMENSION_TYPE_ANY || hs->dimensions[i].type == type) {
 			if (n == 0)
 				return &hs->dimensions[i];
 			n--;
@@ -111,19 +103,16 @@ ts_hyperspace_get_mutable_dimension(Hyperspace *hs, DimensionType type, Index n)
 }
 
 const Dimension *
-ts_hyperspace_get_dimension(const Hyperspace *hs, DimensionType type, Index n)
-{
+ts_hyperspace_get_dimension(const Hyperspace *hs, DimensionType type, Index n) {
 	return ts_hyperspace_get_mutable_dimension((Hyperspace *) hs, type, n);
 }
 
 static int
-hyperspace_get_num_dimensions_by_type(Hyperspace *hs, DimensionType type)
-{
+hyperspace_get_num_dimensions_by_type(Hyperspace *hs, DimensionType type) {
 	int i;
 	int n = 0;
 
-	for (i = 0; i < hs->num_dimensions; i++)
-	{
+	for (i = 0; i < hs->num_dimensions; i++) {
 		if (type == DIMENSION_TYPE_ANY || hs->dimensions[i].type == type)
 			n++;
 	}
@@ -132,8 +121,7 @@ hyperspace_get_num_dimensions_by_type(Hyperspace *hs, DimensionType type)
 }
 
 static inline DimensionType
-dimension_type(TupleInfo *ti)
-{
+dimension_type(TupleInfo *ti) {
 	if (slot_attisnull(ti->slot, Anum_dimension_interval_length) &&
 		!slot_attisnull(ti->slot, Anum_dimension_num_slices))
 		return DIMENSION_TYPE_CLOSED;
@@ -148,8 +136,7 @@ dimension_type(TupleInfo *ti)
 }
 
 static void
-dimension_fill_in_from_tuple(Dimension *d, TupleInfo *ti, Oid main_table_relid)
-{
+dimension_fill_in_from_tuple(Dimension *d, TupleInfo *ti, Oid main_table_relid) {
 	Datum values[Natts_dimension];
 	bool isnull[Natts_dimension];
 	bool should_free;
@@ -173,8 +160,7 @@ dimension_fill_in_from_tuple(Dimension *d, TupleInfo *ti, Oid main_table_relid)
 		   NAMEDATALEN);
 
 	if (!isnull[Anum_dimension_partitioning_func_schema - 1] &&
-		!isnull[Anum_dimension_partitioning_func - 1])
-	{
+		!isnull[Anum_dimension_partitioning_func - 1]) {
 		MemoryContext old;
 
 		d->fd.num_slices =
@@ -198,8 +184,7 @@ dimension_fill_in_from_tuple(Dimension *d, TupleInfo *ti, Oid main_table_relid)
 	}
 
 	if (!isnull[Anum_dimension_integer_now_func_schema - 1] &&
-		!isnull[Anum_dimension_integer_now_func - 1])
-	{
+		!isnull[Anum_dimension_integer_now_func - 1]) {
 		namestrcpy(&d->fd.integer_now_func_schema,
 				   DatumGetCString(
 					   values[AttrNumberGetAttrOffset(Anum_dimension_integer_now_func_schema)]));
@@ -222,8 +207,7 @@ dimension_fill_in_from_tuple(Dimension *d, TupleInfo *ti, Oid main_table_relid)
 }
 
 static Datum
-create_range_datum(FunctionCallInfo fcinfo, DimensionSlice *slice)
-{
+create_range_datum(FunctionCallInfo fcinfo, DimensionSlice *slice) {
 	TupleDesc tupdesc;
 	Datum values[2];
 	bool nulls[2] = { false };
@@ -242,13 +226,11 @@ create_range_datum(FunctionCallInfo fcinfo, DimensionSlice *slice)
 }
 
 static DimensionSlice *
-calculate_open_range_default(const Dimension *dim, int64 value)
-{
+calculate_open_range_default(const Dimension *dim, int64 value) {
 	int64 range_start, range_end;
 	Oid dimtype = ts_dimension_get_partition_type(dim);
 
-	if (value < 0)
-	{
+	if (value < 0) {
 		const int64 dim_min = ts_time_get_min(dimtype);
 
 		range_end = ((value + 1) / dim->fd.interval_length) * dim->fd.interval_length;
@@ -259,8 +241,7 @@ calculate_open_range_default(const Dimension *dim, int64 value)
 		else
 			range_start = range_end - dim->fd.interval_length;
 	}
-	else
-	{
+	else {
 		const int64 dim_end = ts_time_get_max(dimtype);
 
 		range_start = (value / dim->fd.interval_length) * dim->fd.interval_length;
@@ -280,9 +261,7 @@ TS_FUNCTION_INFO_V1(ts_dimension_calculate_open_range_default);
 /*
  * Expose open dimension range calculation for testing purposes.
  */
-Datum
-ts_dimension_calculate_open_range_default(PG_FUNCTION_ARGS)
-{
+Datum ts_dimension_calculate_open_range_default(PG_FUNCTION_ARGS) {
 	int64 value = PG_GETARG_INT64(0);
 	Dimension dim = {
 		.type = DIMENSION_TYPE_OPEN,
@@ -296,16 +275,14 @@ ts_dimension_calculate_open_range_default(PG_FUNCTION_ARGS)
 }
 
 static int64
-calculate_closed_range_interval(const Dimension *dim)
-{
+calculate_closed_range_interval(const Dimension *dim) {
 	Assert(NULL != dim && IS_CLOSED_DIMENSION(dim));
 
 	return DIMENSION_SLICE_CLOSED_MAX / ((int64) dim->fd.num_slices);
 }
 
 static DimensionSlice *
-calculate_closed_range_default(const Dimension *dim, int64 value)
-{
+calculate_closed_range_default(const Dimension *dim, int64 value) {
 	int64 range_start, range_end;
 
 	/* The interval that divides the dimension into N equal sized slices */
@@ -315,20 +292,17 @@ calculate_closed_range_default(const Dimension *dim, int64 value)
 	if (value < 0)
 		elog(ERROR, "invalid value " INT64_FORMAT " for closed dimension", value);
 
-	if (value >= last_start)
-	{
+	if (value >= last_start) {
 		/* put overflow from integer-division errors in last range */
 		range_start = last_start;
 		range_end = DIMENSION_SLICE_MAXVALUE;
 	}
-	else
-	{
+	else {
 		range_start = (value / interval) * interval;
 		range_end = range_start + interval;
 	}
 
-	if (0 == range_start)
-	{
+	if (0 == range_start) {
 		range_start = DIMENSION_SLICE_MINVALUE;
 	}
 
@@ -340,9 +314,7 @@ TS_FUNCTION_INFO_V1(ts_dimension_calculate_closed_range_default);
 /*
  * Exposed closed dimension range calculation for testing purposes.
  */
-Datum
-ts_dimension_calculate_closed_range_default(PG_FUNCTION_ARGS)
-{
+Datum ts_dimension_calculate_closed_range_default(PG_FUNCTION_ARGS) {
 	int64 value = PG_GETARG_INT64(0);
 	Dimension dim = {
 		.type = DIMENSION_TYPE_CLOSED,
@@ -355,8 +327,7 @@ ts_dimension_calculate_closed_range_default(PG_FUNCTION_ARGS)
 }
 
 DimensionSlice *
-ts_dimension_calculate_default_slice(const Dimension *dim, int64 value)
-{
+ts_dimension_calculate_default_slice(const Dimension *dim, int64 value) {
 	if (IS_OPEN_DIMENSION(dim))
 		return calculate_open_range_default(dim, value);
 
@@ -379,8 +350,7 @@ ts_dimension_calculate_default_slice(const Dimension *dim, int64 value)
  * ' | A | B | C | D | E |
  */
 static int
-ts_dimension_get_open_slice_ordinal(const Dimension *dim, const DimensionSlice *slice)
-{
+ts_dimension_get_open_slice_ordinal(const Dimension *dim, const DimensionSlice *slice) {
 	DimensionVec *vec;
 	int i;
 
@@ -396,8 +366,7 @@ ts_dimension_get_open_slice_ordinal(const Dimension *dim, const DimensionSlice *
 
 	if (i >= 0)
 		return i;
-	else
-	{
+	else {
 		/*
 		 * Returns the number of slices if the slice not found, i.e., i = -1.
 		 * Dimension slice might not exist if a chunk table is created without
@@ -424,8 +393,7 @@ ts_dimension_get_open_slice_ordinal(const Dimension *dim, const DimensionSlice *
  * the ordinal of current slice most overlapping the given slice (or first fully overlapped slice).
  */
 static int
-ts_dimension_get_closed_slice_ordinal(const Dimension *dim, const DimensionSlice *target_slice)
-{
+ts_dimension_get_closed_slice_ordinal(const Dimension *dim, const DimensionSlice *target_slice) {
 	int64 current_slice_size;
 	int64 target_slice_size;
 	int candidate_slice_ordinal;
@@ -471,15 +439,12 @@ ts_dimension_get_closed_slice_ordinal(const Dimension *dim, const DimensionSlice
  * dimension it belongs to. In other words, the "earliest" slice along the
  * dimensional axis gets the lowest ordinal value and the "latest" the largest.
  */
-int
-ts_dimension_get_slice_ordinal(const Dimension *dim, const DimensionSlice *slice)
-{
+int ts_dimension_get_slice_ordinal(const Dimension *dim, const DimensionSlice *slice) {
 	Assert(NULL != dim);
 	Assert(NULL != slice);
 	Assert(dim->fd.id == slice->fd.dimension_id);
 
-	switch (dim->type)
-	{
+	switch (dim->type) {
 		case DIMENSION_TYPE_OPEN:
 			return ts_dimension_get_open_slice_ordinal(dim, slice);
 		case DIMENSION_TYPE_CLOSED:
@@ -496,8 +461,7 @@ ts_dimension_get_slice_ordinal(const Dimension *dim, const DimensionSlice *slice
 
 static Hyperspace *
 hyperspace_create(int32 hypertable_id, Oid main_table_relid, uint16 num_dimensions,
-				  MemoryContext mctx)
-{
+				  MemoryContext mctx) {
 	Hyperspace *hs = MemoryContextAllocZero(mctx, HYPERSPACE_SIZE(num_dimensions));
 
 	hs->hypertable_id = hypertable_id;
@@ -508,8 +472,7 @@ hyperspace_create(int32 hypertable_id, Oid main_table_relid, uint16 num_dimensio
 }
 
 static ScanTupleResult
-dimension_tuple_found(TupleInfo *ti, void *data)
-{
+dimension_tuple_found(TupleInfo *ti, void *data) {
 	Hyperspace *hs = data;
 	Dimension *d = &hs->dimensions[hs->num_dimensions++];
 
@@ -520,8 +483,7 @@ dimension_tuple_found(TupleInfo *ti, void *data)
 
 static int
 dimension_scan_internal(ScanKeyData *scankey, int nkeys, tuple_found_func tuple_found, void *data,
-						int limit, int dimension_index, LOCKMODE lockmode, MemoryContext mctx)
-{
+						int limit, int dimension_index, LOCKMODE lockmode, MemoryContext mctx) {
 	Catalog *catalog = ts_catalog_get();
 	ScannerCtx scanctx = {
 		.table = catalog_get_table_id(catalog, DIMENSION),
@@ -541,8 +503,7 @@ dimension_scan_internal(ScanKeyData *scankey, int nkeys, tuple_found_func tuple_
 
 Hyperspace *
 ts_dimension_scan(int32 hypertable_id, Oid main_table_relid, int16 num_dimensions,
-				  MemoryContext mctx)
-{
+				  MemoryContext mctx) {
 	Hyperspace *space = hyperspace_create(hypertable_id, main_table_relid, num_dimensions, mctx);
 	ScanKeyData scankey[1];
 
@@ -569,8 +530,7 @@ ts_dimension_scan(int32 hypertable_id, Oid main_table_relid, int16 num_dimension
 }
 
 static ScanTupleResult
-dimension_find_hypertable_id_tuple_found(TupleInfo *ti, void *data)
-{
+dimension_find_hypertable_id_tuple_found(TupleInfo *ti, void *data) {
 	int32 *hypertable_id = data;
 	bool isnull = false;
 	Datum datum = slot_getattr(ti->slot, Anum_dimension_hypertable_id, &isnull);
@@ -581,9 +541,7 @@ dimension_find_hypertable_id_tuple_found(TupleInfo *ti, void *data)
 	return SCAN_DONE;
 }
 
-int32
-ts_dimension_get_hypertable_id(int32 dimension_id)
-{
+int32 ts_dimension_get_hypertable_id(int32 dimension_id) {
 	int32 hypertable_id;
 	ScanKeyData scankey[1];
 	int ret;
@@ -611,15 +569,13 @@ ts_dimension_get_hypertable_id(int32 dimension_id)
 }
 
 DimensionVec *
-ts_dimension_get_slices(const Dimension *dim)
-{
+ts_dimension_get_slices(const Dimension *dim) {
 	return ts_dimension_slice_scan_by_dimension(dim->fd.id, 0);
 }
 
 static int
 dimension_scan_update(int32 dimension_id, tuple_found_func tuple_found, void *data,
-					  LOCKMODE lockmode)
-{
+					  LOCKMODE lockmode) {
 	Catalog *catalog = ts_catalog_get();
 	ScanKeyData scankey[1];
 	ScannerCtx scanctx = {
@@ -644,8 +600,7 @@ dimension_scan_update(int32 dimension_id, tuple_found_func tuple_found, void *da
 }
 
 static ScanTupleResult
-dimension_tuple_delete(TupleInfo *ti, void *data)
-{
+dimension_tuple_delete(TupleInfo *ti, void *data) {
 	CatalogSecurityContext sec_ctx;
 	bool isnull;
 	Datum dimension_id = slot_getattr(ti->slot, Anum_dimension_id, &isnull);
@@ -664,9 +619,7 @@ dimension_tuple_delete(TupleInfo *ti, void *data)
 	return SCAN_CONTINUE;
 }
 
-int
-ts_dimension_delete_by_hypertable_id(int32 hypertable_id, bool delete_slices)
-{
+int ts_dimension_delete_by_hypertable_id(int32 hypertable_id, bool delete_slices) {
 	ScanKeyData scankey[1];
 
 	/* Perform an index scan to delete based on hypertable_id */
@@ -687,8 +640,7 @@ ts_dimension_delete_by_hypertable_id(int32 hypertable_id, bool delete_slices)
 }
 
 static ScanTupleResult
-dimension_tuple_update(TupleInfo *ti, void *data)
-{
+dimension_tuple_update(TupleInfo *ti, void *data) {
 	Dimension *dim = data;
 	Datum values[Natts_dimension];
 	bool nulls[Natts_dimension];
@@ -709,8 +661,7 @@ dimension_tuple_update(TupleInfo *ti, void *data)
 	values[AttrNumberGetAttrOffset(Anum_dimension_num_slices)] = Int16GetDatum(dim->fd.num_slices);
 
 	if (!nulls[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func)] &&
-		!nulls[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func_schema)])
-	{
+		!nulls[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func_schema)]) {
 		values[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func)] =
 			NameGetDatum(&dim->fd.partitioning_func);
 		values[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func_schema)] =
@@ -718,8 +669,7 @@ dimension_tuple_update(TupleInfo *ti, void *data)
 	}
 
 	if (*NameStr(dim->fd.integer_now_func) != '\0' &&
-		*NameStr(dim->fd.integer_now_func_schema) != '\0')
-	{
+		*NameStr(dim->fd.integer_now_func_schema) != '\0') {
 		values[AttrNumberGetAttrOffset(Anum_dimension_integer_now_func)] =
 			NameGetDatum(&dim->fd.integer_now_func);
 		values[AttrNumberGetAttrOffset(Anum_dimension_integer_now_func_schema)] =
@@ -746,8 +696,7 @@ dimension_tuple_update(TupleInfo *ti, void *data)
 
 static int32
 dimension_insert_relation(Relation rel, int32 hypertable_id, Name colname, Oid coltype,
-						  int16 num_slices, regproc partitioning_func, int64 interval_length)
-{
+						  int16 num_slices, regproc partitioning_func, int64 interval_length) {
 	TupleDesc desc = RelationGetDescr(rel);
 	Datum values[Natts_dimension];
 	bool nulls[Natts_dimension] = { false };
@@ -758,8 +707,7 @@ dimension_insert_relation(Relation rel, int32 hypertable_id, Name colname, Oid c
 	values[AttrNumberGetAttrOffset(Anum_dimension_column_name)] = NameGetDatum(colname);
 	values[AttrNumberGetAttrOffset(Anum_dimension_column_type)] = ObjectIdGetDatum(coltype);
 
-	if (OidIsValid(partitioning_func))
-	{
+	if (OidIsValid(partitioning_func)) {
 		Oid pronamespace = get_func_namespace(partitioning_func);
 
 		values[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func)] =
@@ -767,22 +715,19 @@ dimension_insert_relation(Relation rel, int32 hypertable_id, Name colname, Oid c
 		values[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func_schema)] =
 			DirectFunctionCall1(namein, CStringGetDatum(get_namespace_name(pronamespace)));
 	}
-	else
-	{
+	else {
 		nulls[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func)] = true;
 		nulls[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func_schema)] = true;
 	}
 
-	if (num_slices > 0)
-	{
+	if (num_slices > 0) {
 		/* Closed (hash) dimension */
 		Assert(num_slices > 0 && interval_length <= 0);
 		values[AttrNumberGetAttrOffset(Anum_dimension_num_slices)] = Int16GetDatum(num_slices);
 		values[AttrNumberGetAttrOffset(Anum_dimension_aligned)] = BoolGetDatum(false);
 		nulls[AttrNumberGetAttrOffset(Anum_dimension_interval_length)] = true;
 	}
-	else
-	{
+	else {
 		/* Open (time) dimension */
 		Assert(num_slices <= 0 && interval_length > 0);
 		values[AttrNumberGetAttrOffset(Anum_dimension_interval_length)] =
@@ -806,8 +751,7 @@ dimension_insert_relation(Relation rel, int32 hypertable_id, Name colname, Oid c
 
 static int32
 dimension_insert(int32 hypertable_id, Name colname, Oid coltype, int16 num_slices,
-				 regproc partitioning_func, int64 interval_length)
-{
+				 regproc partitioning_func, int64 interval_length) {
 	Catalog *catalog = ts_catalog_get();
 	Relation rel;
 	int32 dimension_id;
@@ -824,9 +768,7 @@ dimension_insert(int32 hypertable_id, Name colname, Oid coltype, int16 num_slice
 	return dimension_id;
 }
 
-int
-ts_dimension_set_type(Dimension *dim, Oid newtype)
-{
+int ts_dimension_set_type(Dimension *dim, Oid newtype) {
 	if (!IS_VALID_OPEN_DIM_TYPE(newtype))
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
@@ -842,23 +784,18 @@ ts_dimension_set_type(Dimension *dim, Oid newtype)
 }
 
 TSDLLEXPORT Oid
-ts_dimension_get_partition_type(const Dimension *dim)
-{
+ts_dimension_get_partition_type(const Dimension *dim) {
 	Assert(dim != NULL);
 	return dim->partitioning != NULL ? dim->partitioning->partfunc.rettype : dim->fd.column_type;
 }
 
-int
-ts_dimension_set_name(Dimension *dim, const char *newname)
-{
+int ts_dimension_set_name(Dimension *dim, const char *newname) {
 	namestrcpy(&dim->fd.column_name, newname);
 
 	return dimension_scan_update(dim->fd.id, dimension_tuple_update, dim, RowExclusiveLock);
 }
 
-int
-ts_dimension_set_chunk_interval(Dimension *dim, int64 chunk_interval)
-{
+int ts_dimension_set_chunk_interval(Dimension *dim, int64 chunk_interval) {
 	Assert(IS_OPEN_DIMENSION(dim));
 
 	dim->fd.interval_length = chunk_interval;
@@ -866,9 +803,7 @@ ts_dimension_set_chunk_interval(Dimension *dim, int64 chunk_interval)
 	return dimension_scan_update(dim->fd.id, dimension_tuple_update, dim, RowExclusiveLock);
 }
 
-int
-ts_dimension_set_number_of_slices(Dimension *dim, int16 num_slices)
-{
+int ts_dimension_set_number_of_slices(Dimension *dim, int16 num_slices) {
 	Assert(IS_CLOSED_DIMENSION(dim));
 
 	dim->fd.num_slices = num_slices;
@@ -881,15 +816,12 @@ ts_dimension_set_number_of_slices(Dimension *dim, int16 num_slices)
  * partitioning function. Optionally get the type of the resulting value via
  * the restype parameter.
  */
-Datum
-ts_dimension_transform_value(const Dimension *dim, Oid collation, Datum value, Oid const_datum_type,
-							 Oid *restype)
-{
+Datum ts_dimension_transform_value(const Dimension *dim, Oid collation, Datum value, Oid const_datum_type,
+								   Oid *restype) {
 	if (NULL != dim->partitioning)
 		value = ts_partitioning_func_apply(dim->partitioning, collation, value);
 
-	if (NULL != restype)
-	{
+	if (NULL != restype) {
 		if (NULL != dim->partitioning)
 			*restype = dim->partitioning->partfunc.rettype;
 		else if (const_datum_type != InvalidOid)
@@ -902,8 +834,7 @@ ts_dimension_transform_value(const Dimension *dim, Oid collation, Datum value, O
 }
 
 static Point *
-point_create(int16 num_dimensions)
-{
+point_create(int16 num_dimensions) {
 	Point *p = palloc0(POINT_SIZE(num_dimensions));
 
 	p->cardinality = num_dimensions;
@@ -913,13 +844,11 @@ point_create(int16 num_dimensions)
 }
 
 TSDLLEXPORT Point *
-ts_hyperspace_calculate_point(const Hyperspace *hs, TupleTableSlot *slot)
-{
+ts_hyperspace_calculate_point(const Hyperspace *hs, TupleTableSlot *slot) {
 	Point *p = point_create(hs->num_dimensions);
 	int i;
 
-	for (i = 0; i < hs->num_dimensions; i++)
-	{
+	for (i = 0; i < hs->num_dimensions; i++) {
 		const Dimension *d = &hs->dimensions[i];
 		Datum datum;
 		bool isnull;
@@ -930,8 +859,7 @@ ts_hyperspace_calculate_point(const Hyperspace *hs, TupleTableSlot *slot)
 		else
 			datum = slot_getattr(slot, d->column_attno, &isnull);
 
-		switch (d->type)
-		{
+		switch (d->type) {
 			case DIMENSION_TYPE_OPEN:
 				dimtype = ts_dimension_get_partition_type(d);
 
@@ -957,21 +885,19 @@ ts_hyperspace_calculate_point(const Hyperspace *hs, TupleTableSlot *slot)
 }
 
 static inline int64
-interval_to_usec(Interval *interval)
-{
+interval_to_usec(Interval *interval) {
 	return (interval->month * DAYS_PER_MONTH * USECS_PER_DAY) + (interval->day * USECS_PER_DAY) +
 		   interval->time;
 }
 
-#define INT_TYPE_MAX(type)                                                                         \
-	(int64)(((type) == INT2OID) ? PG_INT16_MAX :                                                   \
+#define INT_TYPE_MAX(type)                       \
+	(int64)(((type) == INT2OID) ? PG_INT16_MAX : \
 								  (((type) == INT4OID) ? PG_INT32_MAX : PG_INT64_MAX))
 
 #define IS_VALID_NUM_SLICES(num_slices) ((num_slices) >= 1 && (num_slices) <= PG_INT16_MAX)
 
 static int64
-get_validated_integer_interval(Oid dimtype, int64 value)
-{
+get_validated_integer_interval(Oid dimtype, int64 value) {
 	if (value < 1 || value > INT_TYPE_MAX(dimtype))
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -989,8 +915,7 @@ get_validated_integer_interval(Oid dimtype, int64 value)
 
 static int64
 dimension_interval_to_internal(const char *colname, Oid dimtype, Oid valuetype, Datum value,
-							   bool adaptive_chunking)
-{
+							   bool adaptive_chunking) {
 	int64 interval;
 
 	if (!IS_VALID_OPEN_DIM_TYPE(dimtype))
@@ -999,8 +924,7 @@ dimension_interval_to_internal(const char *colname, Oid dimtype, Oid valuetype, 
 				 errmsg("invalid type for dimension \"%s\"", colname),
 				 errhint("Use an integer, timestamp, or date type.")));
 
-	if (!OidIsValid(valuetype))
-	{
+	if (!OidIsValid(valuetype)) {
 		if (IS_INTEGER_TYPE(dimtype))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -1011,8 +935,7 @@ dimension_interval_to_internal(const char *colname, Oid dimtype, Oid valuetype, 
 		valuetype = INT8OID;
 	}
 
-	switch (valuetype)
-	{
+	switch (valuetype) {
 		case INT2OID:
 			interval = get_validated_integer_interval(dimtype, DatumGetInt16(value));
 			break;
@@ -1054,9 +977,7 @@ TS_FUNCTION_INFO_V1(ts_dimension_interval_to_internal_test);
 /*
  * Exposed for testing purposes.
  */
-Datum
-ts_dimension_interval_to_internal_test(PG_FUNCTION_ARGS)
-{
+Datum ts_dimension_interval_to_internal_test(PG_FUNCTION_ARGS) {
 	Oid dimtype = PG_GETARG_OID(0);
 	Datum value = PG_GETARG_DATUM(1);
 	Oid valuetype = PG_ARGISNULL(1) ? InvalidOid : get_fn_expr_argtype(fcinfo->flinfo, 1);
@@ -1065,8 +986,7 @@ ts_dimension_interval_to_internal_test(PG_FUNCTION_ARGS)
 }
 
 static void
-dimension_add_not_null_on_column(Oid table_relid, char *colname)
-{
+dimension_add_not_null_on_column(Oid table_relid, char *colname) {
 	AlterTableCmd cmd = {
 		.type = T_AlterTableCmd,
 		.subtype = AT_SetNotNull,
@@ -1081,10 +1001,8 @@ dimension_add_not_null_on_column(Oid table_relid, char *colname)
 	ts_alter_table_with_event_trigger(table_relid, (Node *) &cmd, list_make1(&cmd), false);
 }
 
-void
-ts_dimension_update(const Hypertable *ht, const NameData *dimname, DimensionType dimtype,
-					Datum *interval, Oid *intervaltype, int16 *num_slices, Oid *integer_now_func)
-{
+void ts_dimension_update(const Hypertable *ht, const NameData *dimname, DimensionType dimtype,
+						 Datum *interval, Oid *intervaltype, int16 *num_slices, Oid *integer_now_func) {
 	Dimension *dim;
 
 	if (NULL == ht)
@@ -1094,8 +1012,7 @@ ts_dimension_update(const Hypertable *ht, const NameData *dimname, DimensionType
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("invalid dimension type")));
 
-	if (NULL == dimname)
-	{
+	if (NULL == dimname) {
 		if (hyperspace_get_num_dimensions_by_type(ht->space, dimtype) > 1)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -1117,8 +1034,7 @@ ts_dimension_update(const Hypertable *ht, const NameData *dimname, DimensionType
 
 	Assert(dim->type == dimtype);
 
-	if (NULL != interval)
-	{
+	if (NULL != interval) {
 		Oid dimtype = ts_dimension_get_partition_type(dim);
 		Assert(NULL != intervaltype);
 
@@ -1132,14 +1048,12 @@ ts_dimension_update(const Hypertable *ht, const NameData *dimname, DimensionType
 										   hypertable_adaptive_chunking_enabled(ht));
 	}
 
-	if (NULL != num_slices)
-	{
+	if (NULL != num_slices) {
 		Assert(IS_CLOSED_DIMENSION(dim));
 		dim->fd.num_slices = *num_slices;
 	}
 
-	if (NULL != integer_now_func)
-	{
+	if (NULL != integer_now_func) {
 		Oid pronamespace = get_func_namespace(*integer_now_func);
 		namestrcpy(&dim->fd.integer_now_func_schema, get_namespace_name(pronamespace));
 		namestrcpy(&dim->fd.integer_now_func, get_func_name(*integer_now_func));
@@ -1151,9 +1065,7 @@ ts_dimension_update(const Hypertable *ht, const NameData *dimname, DimensionType
 
 TS_FUNCTION_INFO_V1(ts_dimension_set_num_slices);
 
-Datum
-ts_dimension_set_num_slices(PG_FUNCTION_ARGS)
-{
+Datum ts_dimension_set_num_slices(PG_FUNCTION_ARGS) {
 	Oid table_relid = PG_GETARG_OID(0);
 	int32 num_slices_arg = PG_ARGISNULL(1) ? -1 : PG_GETARG_INT32(1);
 	Name colname = PG_ARGISNULL(2) ? NULL : PG_GETARG_NAME(2);
@@ -1203,9 +1115,7 @@ TS_FUNCTION_INFO_V1(ts_dimension_set_interval);
  *     microseconds, or an INTERVAL type.
  * dimension_name - The name of the dimension
  */
-Datum
-ts_dimension_set_interval(PG_FUNCTION_ARGS)
-{
+Datum ts_dimension_set_interval(PG_FUNCTION_ARGS) {
 	Oid table_relid = PG_GETARG_OID(0);
 	Datum interval = PG_GETARG_DATUM(1);
 	Oid intervaltype = InvalidOid;
@@ -1235,26 +1145,28 @@ ts_dimension_set_interval(PG_FUNCTION_ARGS)
 	PG_RETURN_VOID();
 }
 
-DimensionInfo *
-ts_dimension_info_create_open(Oid table_relid, Name column_name, Datum interval, Oid interval_type,
-							  regproc partitioning_func)
-{
-	DimensionInfo *info = palloc(sizeof(*info));
-	*info = (DimensionInfo){
+DimensionInfo *ts_dimension_info_create_open(Oid tableOid,
+											 Name timeColumnName,
+											 Datum interval,
+											 Oid intervalType,
+											 regproc partitioningFunc) {
+	DimensionInfo *dimensionInfo = palloc(sizeof(*dimensionInfo));
+	*dimensionInfo = (DimensionInfo){
 		.type = DIMENSION_TYPE_OPEN,
-		.table_relid = table_relid,
-		.colname = column_name,
+		.table_relid = tableOid,
+		.colname = timeColumnName,
 		.interval_datum = interval,
-		.interval_type = interval_type,
-		.partitioning_func = partitioning_func,
+		.interval_type = intervalType,
+		.partitioning_func = partitioningFunc,
 	};
-	return info;
+	return dimensionInfo;
 }
 
 DimensionInfo *
-ts_dimension_info_create_closed(Oid table_relid, Name column_name, int32 num_slices,
-								regproc partitioning_func)
-{
+ts_dimension_info_create_closed(Oid table_relid,
+								Name column_name,
+								int32 num_slices,
+								regproc partitioning_func) {
 	DimensionInfo *info = palloc(sizeof(*info));
 	*info = (DimensionInfo){
 		.type = DIMENSION_TYPE_CLOSED,
@@ -1268,15 +1180,12 @@ ts_dimension_info_create_closed(Oid table_relid, Name column_name, int32 num_sli
 }
 
 /* Validate the configuration of an open ("time") dimension */
-static void
-dimension_info_validate_open(DimensionInfo *info)
-{
+static void dimension_info_validate_open(DimensionInfo *info) {
 	Oid dimtype = info->coltype;
 
 	Assert(info->type == DIMENSION_TYPE_OPEN);
 
-	if (OidIsValid(info->partitioning_func))
-	{
+	if (OidIsValid(info->partitioning_func)) {
 		if (!ts_partitioning_func_is_valid(info->partitioning_func, info->type, info->coltype))
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
@@ -1298,8 +1207,7 @@ dimension_info_validate_open(DimensionInfo *info)
 
 /* Validate the configuration of a closed ("space") dimension */
 static void
-dimension_info_validate_closed(DimensionInfo *info)
-{
+dimension_info_validate_closed(DimensionInfo *info) {
 	Assert(info->type == DIMENSION_TYPE_CLOSED);
 
 	if (!OidIsValid(info->partitioning_func))
@@ -1321,9 +1229,7 @@ dimension_info_validate_closed(DimensionInfo *info)
 						 PG_INT16_MAX)));
 }
 
-void
-ts_dimension_info_validate(DimensionInfo *info)
-{
+void ts_dimension_info_validate(DimensionInfo *info) {
 	const Dimension *dim;
 	HeapTuple tuple;
 	Datum datum;
@@ -1370,15 +1276,13 @@ ts_dimension_info_validate(DimensionInfo *info)
 
 	ReleaseSysCache(tuple);
 
-	if (NULL != info->ht)
-	{
+	if (NULL != info->ht) {
 		/* Check if the dimension already exists */
 		dim = ts_hyperspace_get_dimension_by_name(info->ht->space,
 												  DIMENSION_TYPE_ANY,
 												  NameStr(*info->colname));
 
-		if (NULL != dim)
-		{
+		if (NULL != dim) {
 			if (!info->if_not_exists)
 				ereport(ERROR,
 						(errcode(ERRCODE_TS_DUPLICATE_DIMENSION),
@@ -1394,8 +1298,7 @@ ts_dimension_info_validate(DimensionInfo *info)
 		}
 	}
 
-	switch (info->type)
-	{
+	switch (info->type) {
 		case DIMENSION_TYPE_CLOSED:
 			dimension_info_validate_closed(info);
 			break;
@@ -1408,9 +1311,7 @@ ts_dimension_info_validate(DimensionInfo *info)
 	}
 }
 
-int32
-ts_dimension_add_from_info(DimensionInfo *info)
-{
+int32 ts_dimension_add_from_info(DimensionInfo *info) {
 	if (info->set_not_null && info->type == DIMENSION_TYPE_OPEN)
 		dimension_add_not_null_on_column(info->table_relid, NameStr(*info->colname));
 
@@ -1430,8 +1331,7 @@ ts_dimension_add_from_info(DimensionInfo *info)
  * Create a datum to be returned by add_dimension DDL function
  */
 static Datum
-dimension_create_datum(FunctionCallInfo fcinfo, DimensionInfo *info)
-{
+dimension_create_datum(FunctionCallInfo fcinfo, DimensionInfo *info) {
 	TupleDesc tupdesc;
 	HeapTuple tuple;
 	Datum values[Natts_add_dimension];
@@ -1469,9 +1369,7 @@ TS_FUNCTION_INFO_V1(ts_dimension_add);
  * 4. Partitioning function
  * 5. IF NOT EXISTS option (bool)
  */
-Datum
-ts_dimension_add(PG_FUNCTION_ARGS)
-{
+Datum ts_dimension_add(PG_FUNCTION_ARGS) {
 	Cache *hcache;
 	DimensionInfo info = {
 		.type = PG_ARGISNULL(2) ? DIMENSION_TYPE_OPEN : DIMENSION_TYPE_CLOSED,
@@ -1526,8 +1424,7 @@ ts_dimension_add(PG_FUNCTION_ARGS)
 
 	ts_dimension_info_validate(&info);
 
-	if (!info.skip)
-	{
+	if (!info.skip) {
 		int32 dimension_id;
 
 		if (ts_hypertable_has_chunks(info.table_relid, AccessShareLock))
@@ -1570,8 +1467,7 @@ ts_dimension_add(PG_FUNCTION_ARGS)
 
 /* Used as a tuple found function */
 static ScanTupleResult
-dimension_rename_schema_name(TupleInfo *ti, void *data)
-{
+dimension_rename_schema_name(TupleInfo *ti, void *data) {
 	/* Dimension table may contain null valued columns that is why we do not use
 	 * FormData_dimension *dimension = (FormData_dimension *) GETSTRUCT(tuple);
 	 * pattern here
@@ -1591,13 +1487,11 @@ dimension_rename_schema_name(TupleInfo *ti, void *data)
 		   !nulls[AttrNumberGetAttrOffset(Anum_dimension_integer_now_func_schema)]);
 
 	/* Rename schema names */
-	if (!nulls[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func_schema)])
-	{
+	if (!nulls[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func_schema)]) {
 		schemaname =
 			DatumGetName(values[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func_schema)]);
 
-		if (namestrcmp(schemaname, names[0]) == 0)
-		{
+		if (namestrcmp(schemaname, names[0]) == 0) {
 			namestrcpy(schemaname, (const char *) names[1]);
 			values[AttrNumberGetAttrOffset(Anum_dimension_partitioning_func_schema)] =
 				NameGetDatum(schemaname);
@@ -1605,12 +1499,10 @@ dimension_rename_schema_name(TupleInfo *ti, void *data)
 		}
 	}
 
-	if (!nulls[AttrNumberGetAttrOffset(Anum_dimension_integer_now_func_schema)])
-	{
+	if (!nulls[AttrNumberGetAttrOffset(Anum_dimension_integer_now_func_schema)]) {
 		schemaname =
 			DatumGetName(values[AttrNumberGetAttrOffset(Anum_dimension_integer_now_func_schema)]);
-		if (namestrcmp(schemaname, names[0]) == 0)
-		{
+		if (namestrcmp(schemaname, names[0]) == 0) {
 			namestrcpy(schemaname, (const char *) names[1]);
 			values[AttrNumberGetAttrOffset(Anum_dimension_integer_now_func_schema)] =
 				NameGetDatum(schemaname);
@@ -1629,9 +1521,7 @@ dimension_rename_schema_name(TupleInfo *ti, void *data)
 }
 
 /* Go through internal dimensions table and rename all relevant schema */
-void
-ts_dimensions_rename_schema_name(const char *old_name, const char *new_name)
-{
+void ts_dimensions_rename_schema_name(const char *old_name, const char *new_name) {
 	NameData old_schema_name;
 	ScanKeyData scankey[1];
 	Catalog *catalog = ts_catalog_get();
@@ -1673,8 +1563,7 @@ ts_dimensions_rename_schema_name(const char *old_name, const char *new_name)
  * a partitioning key.
  */
 List *
-ts_dimension_get_partexprs(const Dimension *dim, Index hyper_varno)
-{
+ts_dimension_get_partexprs(const Dimension *dim, Index hyper_varno) {
 	Expr *expr = NULL;
 	HeapTuple tuple;
 	Form_pg_attribute att;

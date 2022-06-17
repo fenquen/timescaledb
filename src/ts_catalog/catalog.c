@@ -77,8 +77,8 @@ static const TableInfoDef catalog_table_names[_MAX_CATALOG_TABLES + 1] = {
 		.table_name = BGW_POLICY_CHUNK_STATS_TABLE_NAME,
 	},
 	[CONTINUOUS_AGG] = {
-			.schema_name = CATALOG_SCHEMA_NAME,
-			.table_name = CONTINUOUS_AGG_TABLE_NAME,
+		.schema_name = CATALOG_SCHEMA_NAME,
+		.table_name = CONTINUOUS_AGG_TABLE_NAME,
 	},
 	[CONTINUOUS_AGGS_HYPERTABLE_INVALIDATION_LOG] = {
 		.schema_name = CATALOG_SCHEMA_NAME,
@@ -121,35 +121,33 @@ static const TableInfoDef catalog_table_names[_MAX_CATALOG_TABLES + 1] = {
 static const TableIndexDef catalog_table_index_definitions[_MAX_CATALOG_TABLES] = {
 	[HYPERTABLE] = {
 		.length = _MAX_HYPERTABLE_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[HYPERTABLE_ID_INDEX] = "hypertable_pkey",
 			[HYPERTABLE_NAME_INDEX] = "hypertable_table_name_schema_name_key",
 		},
 	},
-	[HYPERTABLE_DATA_NODE] = {
-		.length = _MAX_HYPERTABLE_DATA_NODE_INDEX,
-		.names = (char *[]) {
-			[HYPERTABLE_DATA_NODE_HYPERTABLE_ID_NODE_NAME_IDX] = "hypertable_data_node_hypertable_id_node_name_key",
-			[HYPERTABLE_DATA_NODE_NODE_HYPERTABLE_ID_NODE_NAME_IDX] = "hypertable_data_node_node_hypertable_id_node_name_key",
-		}
-	},
+
+	[HYPERTABLE_DATA_NODE] = { .length = _MAX_HYPERTABLE_DATA_NODE_INDEX, .names = (char *[]){
+																			  [HYPERTABLE_DATA_NODE_HYPERTABLE_ID_NODE_NAME_IDX] = "hypertable_data_node_hypertable_id_node_name_key",
+																			  [HYPERTABLE_DATA_NODE_NODE_HYPERTABLE_ID_NODE_NAME_IDX] = "hypertable_data_node_node_hypertable_id_node_name_key",
+																		  } },
 	[DIMENSION] = {
 		.length = _MAX_DIMENSION_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[DIMENSION_ID_IDX] = "dimension_pkey",
 			[DIMENSION_HYPERTABLE_ID_COLUMN_NAME_IDX] = "dimension_hypertable_id_column_name_key",
 		},
 	},
 	[DIMENSION_SLICE] = {
 		.length = _MAX_DIMENSION_SLICE_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[DIMENSION_SLICE_ID_IDX] = "dimension_slice_pkey",
 			[DIMENSION_SLICE_DIMENSION_ID_RANGE_START_RANGE_END_IDX] = "dimension_slice_dimension_id_range_start_range_end_key",
 		},
 	},
 	[CHUNK] = {
 		.length = _MAX_CHUNK_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[CHUNK_ID_INDEX] = "chunk_pkey",
 			[CHUNK_HYPERTABLE_ID_INDEX] = "chunk_hypertable_id_idx",
 			[CHUNK_SCHEMA_NAME_INDEX] = "chunk_schema_name_table_name_key",
@@ -158,117 +156,100 @@ static const TableIndexDef catalog_table_index_definitions[_MAX_CATALOG_TABLES] 
 	},
 	[CHUNK_CONSTRAINT] = {
 		.length = _MAX_CHUNK_CONSTRAINT_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[CHUNK_CONSTRAINT_CHUNK_ID_CONSTRAINT_NAME_IDX] = "chunk_constraint_chunk_id_constraint_name_key",
 			[CHUNK_CONSTRAINT_DIMENSION_SLICE_ID_IDX] = "chunk_constraint_dimension_slice_id_idx",
 		},
 	},
 	[CHUNK_INDEX] = {
 		.length = _MAX_CHUNK_INDEX_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[CHUNK_INDEX_CHUNK_ID_INDEX_NAME_IDX] = "chunk_index_chunk_id_index_name_key",
 			[CHUNK_INDEX_HYPERTABLE_ID_HYPERTABLE_INDEX_NAME_IDX] = "chunk_index_hypertable_id_hypertable_index_name_idx",
 		},
 	},
-	[CHUNK_DATA_NODE] = {
-		.length = _MAX_CHUNK_DATA_NODE_INDEX,
-		.names = (char *[]) {
-			[CHUNK_DATA_NODE_CHUNK_ID_NODE_NAME_IDX] = "chunk_data_node_chunk_id_node_name_key",
-			[CHUNK_DATA_NODE_NODE_CHUNK_ID_NODE_NAME_IDX] = "chunk_data_node_node_chunk_id_node_name_key",
-		}
-	},
+	[CHUNK_DATA_NODE] = { .length = _MAX_CHUNK_DATA_NODE_INDEX, .names = (char *[]){
+																	[CHUNK_DATA_NODE_CHUNK_ID_NODE_NAME_IDX] = "chunk_data_node_chunk_id_node_name_key",
+																	[CHUNK_DATA_NODE_NODE_CHUNK_ID_NODE_NAME_IDX] = "chunk_data_node_node_chunk_id_node_name_key",
+																} },
 	[TABLESPACE] = {
 		.length = _MAX_TABLESPACE_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[TABLESPACE_PKEY_IDX] = "tablespace_pkey",
 			[TABLESPACE_HYPERTABLE_ID_TABLESPACE_NAME_IDX] = "tablespace_hypertable_id_tablespace_name_key",
 		},
 	},
 	[BGW_JOB] = {
 		.length = _MAX_BGW_JOB_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[BGW_JOB_PKEY_IDX] = "bgw_job_pkey",
 			[BGW_JOB_PROC_HYPERTABLE_ID_IDX] = "bgw_job_proc_hypertable_id_idx",
 		},
 	},
 	[BGW_JOB_STAT] = {
 		.length = _MAX_BGW_JOB_STAT_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[BGW_JOB_STAT_PKEY_IDX] = "bgw_job_stat_pkey",
 		},
 	},
 	[METADATA] = {
 		.length = _MAX_METADATA_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[METADATA_PKEY_IDX] = "metadata_pkey",
 		},
 	},
-	[BGW_POLICY_CHUNK_STATS] = {
-		.length = _MAX_BGW_POLICY_CHUNK_STATS_INDEX,
-		.names = (char *[]) {
-			[BGW_POLICY_CHUNK_STATS_JOB_ID_CHUNK_ID_IDX] = "bgw_policy_chunk_stats_job_id_chunk_id_key",
-		}
-	},
+	[BGW_POLICY_CHUNK_STATS] = { .length = _MAX_BGW_POLICY_CHUNK_STATS_INDEX, .names = (char *[]){
+																				  [BGW_POLICY_CHUNK_STATS_JOB_ID_CHUNK_ID_IDX] = "bgw_policy_chunk_stats_job_id_chunk_id_key",
+																			  } },
 	[CONTINUOUS_AGG] = {
 		.length = _MAX_CONTINUOUS_AGG_INDEX,
-		.names = (char *[]) {
-			[CONTINUOUS_AGG_PARTIAL_VIEW_SCHEMA_PARTIAL_VIEW_NAME_KEY] = "continuous_agg_partial_view_schema_partial_view_name_key",
-			[CONTINUOUS_AGG_PKEY] = "continuous_agg_pkey",
-			[CONTINUOUS_AGG_USER_VIEW_SCHEMA_USER_VIEW_NAME_KEY] = "continuous_agg_user_view_schema_user_view_name_key",
-			[CONTINUOUS_AGG_RAW_HYPERTABLE_ID_IDX] = "continuous_agg_raw_hypertable_id_idx"
-		},
+		.names = (char *[]){ [CONTINUOUS_AGG_PARTIAL_VIEW_SCHEMA_PARTIAL_VIEW_NAME_KEY] = "continuous_agg_partial_view_schema_partial_view_name_key", [CONTINUOUS_AGG_PKEY] = "continuous_agg_pkey", [CONTINUOUS_AGG_USER_VIEW_SCHEMA_USER_VIEW_NAME_KEY] = "continuous_agg_user_view_schema_user_view_name_key", [CONTINUOUS_AGG_RAW_HYPERTABLE_ID_IDX] = "continuous_agg_raw_hypertable_id_idx" },
 	},
 	[CONTINUOUS_AGGS_HYPERTABLE_INVALIDATION_LOG] = {
 		.length = _MAX_CONTINUOUS_AGGS_HYPERTABLE_INVALIDATION_LOG_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[CONTINUOUS_AGGS_HYPERTABLE_INVALIDATION_LOG_IDX] = "continuous_aggs_hypertable_invalidation_log_idx",
 		},
 	},
 	[CONTINUOUS_AGGS_INVALIDATION_THRESHOLD] = {
 		.length = _MAX_CONTINUOUS_AGGS_INVALIDATION_THRESHOLD_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[CONTINUOUS_AGGS_INVALIDATION_THRESHOLD_PKEY] = "continuous_aggs_invalidation_threshold_pkey",
 		},
 	},
 	[CONTINUOUS_AGGS_MATERIALIZATION_INVALIDATION_LOG] = {
 		.length = _MAX_CONTINUOUS_AGGS_MATERIALIZATION_INVALIDATION_LOG_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[CONTINUOUS_AGGS_MATERIALIZATION_INVALIDATION_LOG_IDX] = "continuous_aggs_materialization_invalidation_log_idx",
 		},
 	},
 	[HYPERTABLE_COMPRESSION] = {
-		.length =  _MAX_HYPERTABLE_COMPRESSION_INDEX,
-		.names = (char *[]) {
+		.length = _MAX_HYPERTABLE_COMPRESSION_INDEX,
+		.names = (char *[]){
 			[HYPERTABLE_COMPRESSION_PKEY] = "hypertable_compression_pkey",
 		},
 	},
 	[COMPRESSION_CHUNK_SIZE] = {
-		.length =  _MAX_COMPRESSION_CHUNK_SIZE_INDEX,
-		.names = (char *[]) {
+		.length = _MAX_COMPRESSION_CHUNK_SIZE_INDEX,
+		.names = (char *[]){
 			[COMPRESSION_CHUNK_SIZE_PKEY] = "compression_chunk_size_pkey",
 		},
 	},
-	[REMOTE_TXN] = {
-		.length = _MAX_REMOTE_TXN_INDEX,
-		.names = (char *[]) {
-			[REMOTE_TXN_PKEY_IDX] = "remote_txn_pkey",
-			[REMOTE_TXN_DATA_NODE_NAME_IDX] = "remote_txn_data_node_name_idx"
-		}
-	},
+	[REMOTE_TXN] = { .length = _MAX_REMOTE_TXN_INDEX, .names = (char *[]){ [REMOTE_TXN_PKEY_IDX] = "remote_txn_pkey", [REMOTE_TXN_DATA_NODE_NAME_IDX] = "remote_txn_data_node_name_idx" } },
 	[CHUNK_COPY_OPERATION] = {
 		.length = _MAX_CHUNK_COPY_OPERATION_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[CHUNK_COPY_OPERATION_PKEY_IDX] = "chunk_copy_operation_pkey",
 		},
 	},
 	[CONTINUOUS_AGGS_BUCKET_FUNCTION] = {
 		.length = _MAX_CONTINUOUS_AGGS_BUCKET_FUNCTION_INDEX,
-		.names = (char *[]) {
+		.names = (char *[]){
 			[CONTINUOUS_AGGS_BUCKET_FUNCTION_PKEY_IDX] = "continuous_aggs_bucket_function_pkey",
 		},
 	}
 };
-
+// 各个serial的全名
 static const char *catalog_table_serial_id_names[_MAX_CATALOG_TABLES] = {
 	[HYPERTABLE] = CATALOG_SCHEMA_NAME ".hypertable_id_seq",
 	[HYPERTABLE_DATA_NODE] = NULL,
@@ -290,8 +271,7 @@ static const char *catalog_table_serial_id_names[_MAX_CATALOG_TABLES] = {
 	[CHUNK_COPY_OPERATION] = CATALOG_SCHEMA_NAME ".chunk_copy_operation_id_seq",
 };
 
-typedef struct InternalFunctionDef
-{
+typedef struct InternalFunctionDef {
 	char *name;
 	int args;
 } InternalFunctionDef;
@@ -325,8 +305,7 @@ static CatalogDatabaseInfo database_info = {
 };
 
 static bool
-catalog_is_valid(Catalog *catalog)
-{
+catalog_is_valid(Catalog *catalog) {
 	return catalog != NULL && catalog->initialized;
 }
 
@@ -334,8 +313,7 @@ catalog_is_valid(Catalog *catalog)
  * Get the user ID of the catalog owner.
  */
 static Oid
-catalog_owner(void)
-{
+catalog_owner(void) {
 	HeapTuple tuple;
 	Oid owner_oid;
 	Oid nsp_oid = get_namespace_oid(CATALOG_SCHEMA_NAME, false);
@@ -355,14 +333,11 @@ catalog_owner(void)
 }
 
 static const char *
-catalog_table_name(CatalogTable table)
-{
+catalog_table_name(CatalogTable table) {
 	return catalog_table_names[table].table_name;
 }
 
-static void
-catalog_database_info_init(CatalogDatabaseInfo *info)
-{
+static void catalog_database_info_init(CatalogDatabaseInfo *info) {
 	info->database_id = MyDatabaseId;
 	strlcpy(info->database_name, get_database_name(MyDatabaseId), NAMEDATALEN);
 	info->schema_id = get_namespace_oid(CATALOG_SCHEMA_NAME, false);
@@ -372,14 +347,11 @@ catalog_database_info_init(CatalogDatabaseInfo *info)
 		elog(ERROR, "OID lookup failed for schema \"%s\"", CATALOG_SCHEMA_NAME);
 }
 
-TSDLLEXPORT CatalogDatabaseInfo *
-ts_catalog_database_info_get()
-{
+TSDLLEXPORT CatalogDatabaseInfo *ts_catalog_database_info_get() {
 	if (!ts_extension_is_loaded())
 		elog(ERROR, "tried calling catalog_database_info_get when extension isn't loaded");
 
-	if (!OidIsValid(database_info.database_id))
-	{
+	if (!OidIsValid(database_info.database_id)) {
 		if (!IsTransactionState())
 			elog(ERROR, "cannot initialize catalog_database_info outside of a transaction");
 
@@ -393,85 +365,75 @@ ts_catalog_database_info_get()
 /*
  * The rest of the arguments are used to populate the first arg.
  */
-void
-ts_catalog_table_info_init(CatalogTableInfo *tables_info, int max_tables,
-						   const TableInfoDef *table_ary, const TableIndexDef *index_ary,
-						   const char **serial_id_ary)
-{
-	int i;
+void ts_catalog_table_info_init(CatalogTableInfo *catalogTableInfoArr, // 数组首部
+								int maxTableCount,					   // 数组长度
+								const TableInfoDef *tableInfoDefArr,
+								const TableIndexDef *tableIndexDefArr,
+								const char **sequenceNameArr) {
+	for (int i = 0; i < maxTableCount; i++) {
+		Oid schemaOid = get_namespace_oid(tableInfoDefArr[i].schema_name, false);
+		Oid tableOid = get_relname_relid(tableInfoDefArr[i].table_name, schemaOid);
 
-	for (i = 0; i < max_tables; i++)
-	{
-		Oid schema_oid;
-		Oid id;
-		const char *sequence_name;
-		Size number_indexes, j;
-
-		schema_oid = get_namespace_oid(table_ary[i].schema_name, false);
-		id = get_relname_relid(table_ary[i].table_name, schema_oid);
-
-		if (id == InvalidOid)
-			elog(ERROR,
-				 "OID lookup failed for table \"%s.%s\"",
-				 table_ary[i].schema_name,
-				 table_ary[i].table_name);
-
-		tables_info[i].id = id;
-
-		number_indexes = index_ary[i].length;
-		Assert(number_indexes <= _MAX_TABLE_INDEXES);
-
-		for (j = 0; j < number_indexes; j++)
-		{
-			id = get_relname_relid(index_ary[i].names[j], schema_oid);
-
-			if (id == InvalidOid)
-				elog(ERROR, "OID lookup failed for table index \"%s\"", index_ary[i].names[j]);
-
-			tables_info[i].index_ids[j] = id;
+		if (tableOid == InvalidOid) {
+			elog(ERROR, "OID lookup failed for table \"%s.%s\"", tableInfoDefArr[i].schema_name, tableInfoDefArr[i].table_name);
 		}
 
-		tables_info[i].name = table_ary[i].table_name;
-		tables_info[i].schema_name = table_ary[i].schema_name;
-		sequence_name = serial_id_ary[i];
+		catalogTableInfoArr[i].id = tableOid;
 
-		if (NULL != sequence_name)
-		{
-			RangeVar *sequence;
+		Size indexNum = tableIndexDefArr[i].length;
+		Assert(indexNum <= _MAX_TABLE_INDEXES);
+		for (Size j = 0; j < indexNum; j++) {
+			Oid indexOid = get_relname_relid(tableIndexDefArr[i].names[j], schemaOid);
 
-			sequence = makeRangeVarFromNameList(stringToQualifiedNameList(sequence_name));
-			tables_info[i].serial_relid = RangeVarGetRelid(sequence, NoLock, false);
+			if (indexOid == InvalidOid) {
+				elog(ERROR, "OID lookup failed for table index \"%s\"", tableIndexDefArr[i].names[j]);
+			}
+
+			catalogTableInfoArr[i].index_ids[j] = indexOid;
 		}
-		else
-			tables_info[i].serial_relid = InvalidOid;
+
+		catalogTableInfoArr[i].name = tableInfoDefArr[i].table_name;
+		catalogTableInfoArr[i].schema_name = tableInfoDefArr[i].schema_name;
+
+		const char *sequenceName = sequenceNameArr[i];
+		if (NULL != sequenceName) {
+			RangeVar *sequence = makeRangeVarFromNameList(stringToQualifiedNameList(sequenceName));
+			catalogTableInfoArr[i].serial_relid = RangeVarGetRelid(sequence, NoLock, false);
+		} else {
+			catalogTableInfoArr[i].serial_relid = InvalidOid;
+		}
 	}
 }
 
-TSDLLEXPORT Catalog *
-ts_catalog_get(void)
-{
-	int i;
-
-	if (!OidIsValid(MyDatabaseId))
+// 得到相关的全部信息:序列 函数 schema 表
+TSDLLEXPORT Catalog *ts_catalog_get(void) {
+	if (!OidIsValid(MyDatabaseId)) {
 		elog(ERROR, "invalid database ID");
+	}
 
-	if (!ts_extension_is_loaded())
+	if (!ts_extension_is_loaded()) {
 		elog(ERROR, "tried calling catalog_get when extension isn't loaded");
+	}
 
-	if (s_catalog.initialized || !IsTransactionState())
+	if (s_catalog.initialized || !IsTransactionState()) {
 		return &s_catalog;
+	}
 
 	memset(&s_catalog, 0, sizeof(Catalog));
+
+	// 注入了表的信息
 	ts_catalog_table_info_init(s_catalog.tables,
 							   _MAX_CATALOG_TABLES,
 							   catalog_table_names,
 							   catalog_table_index_definitions,
 							   catalog_table_serial_id_names);
 
-	for (i = 0; i < _TS_MAX_SCHEMA; i++)
+	// schema信息
+	for (int i = 0; i < _TS_MAX_SCHEMA; i++)
 		s_catalog.extension_schema_id[i] = get_namespace_oid(ts_extension_schema_names[i], false);
 
-	for (i = 0; i < _MAX_CACHE_TYPES; i++)
+	// cache type
+	for (int i = 0; i < _MAX_CACHE_TYPES; i++)
 		s_catalog.caches[i].inval_proxy_id =
 			get_relname_relid(cache_proxy_table_names[i],
 							  s_catalog.extension_schema_id[TS_CACHE_SCHEMA]);
@@ -479,37 +441,34 @@ ts_catalog_get(void)
 	ts_cache_invalidate_set_proxy_tables(s_catalog.caches[CACHE_TYPE_HYPERTABLE].inval_proxy_id,
 										 s_catalog.caches[CACHE_TYPE_BGW_JOB].inval_proxy_id);
 
-	for (i = 0; i < _MAX_INTERNAL_FUNCTIONS; i++)
-	{
-		InternalFunctionDef def = internal_function_definitions[i];
-		FuncCandidateList funclist =
-			FuncnameGetCandidates(list_make2(makeString(INTERNAL_SCHEMA_NAME),
-											 makeString(def.name)),
-								  def.args,
-								  NULL,
-								  false,
+	// 函数信息
+	for (int i = 0; i < _MAX_INTERNAL_FUNCTIONS; i++) {
+		InternalFunctionDef internalFunctionDef = internal_function_definitions[i];
+		FuncCandidateList funcCandidateList = FuncnameGetCandidates(list_make2(makeString(INTERNAL_SCHEMA_NAME), makeString(internalFunctionDef.name)),
+																	internalFunctionDef.args,
+																	NULL,
+																	false,
 #if PG14_GE
-								  false, /* include_out_arguments */
+																	false, /* include_out_arguments */
 #endif
-								  false,
-								  false);
+																	false,
+																	false);
 
-		if (funclist == NULL || funclist->next)
+		if (funcCandidateList == NULL || funcCandidateList->next)
 			elog(ERROR,
 				 "OID lookup failed for the function \"%s\" with %d args",
-				 def.name,
-				 def.args);
+				 internalFunctionDef.name,
+				 internalFunctionDef.args);
 
-		s_catalog.functions[i].function_id = funclist->oid;
+		s_catalog.functions[i].function_id = funcCandidateList->oid;
 	}
+
 	s_catalog.initialized = true;
 
 	return &s_catalog;
 }
 
-void
-ts_catalog_reset(void)
-{
+void ts_catalog_reset(void) {
 	s_catalog.initialized = false;
 	database_info.database_id = InvalidOid;
 
@@ -517,12 +476,10 @@ ts_catalog_reset(void)
 }
 
 static CatalogTable
-catalog_get_table(Catalog *catalog, Oid relid)
-{
+catalog_get_table(Catalog *catalog, Oid relid) {
 	unsigned int i;
 
-	if (!catalog_is_valid(catalog))
-	{
+	if (!catalog_is_valid(catalog)) {
 		const char *schema_name = get_namespace_name(get_rel_namespace(relid));
 		const char *relname = get_rel_name(relid);
 
@@ -541,9 +498,7 @@ catalog_get_table(Catalog *catalog, Oid relid)
 	return INVALID_CATALOG_TABLE;
 }
 
-bool
-ts_is_catalog_table(Oid relid)
-{
+bool ts_is_catalog_table(Oid relid) {
 	return catalog_get_table(ts_catalog_get(), relid) != INVALID_CATALOG_TABLE;
 }
 
@@ -551,8 +506,7 @@ ts_is_catalog_table(Oid relid)
  * Get the next serial ID for a catalog table, if one exists for the given table.
  */
 TSDLLEXPORT int64
-ts_catalog_table_next_seq_id(const Catalog *catalog, CatalogTable table)
-{
+ts_catalog_table_next_seq_id(const Catalog *catalog, CatalogTable table) {
 	Oid relid = catalog->tables[table].serial_relid;
 
 	if (!OidIsValid(relid))
@@ -564,11 +518,8 @@ ts_catalog_table_next_seq_id(const Catalog *catalog, CatalogTable table)
 	return DatumGetInt64(DirectFunctionCall1(nextval_oid, ObjectIdGetDatum(relid)));
 }
 
-Oid
-ts_catalog_get_cache_proxy_id(Catalog *catalog, CacheType type)
-{
-	if (!catalog_is_valid(catalog))
-	{
+Oid ts_catalog_get_cache_proxy_id(Catalog *catalog, CacheType type) {
+	if (!catalog_is_valid(catalog)) {
 		Oid schema;
 
 		/*
@@ -602,12 +553,10 @@ ts_catalog_get_cache_proxy_id(Catalog *catalog, CacheType type)
  */
 TSDLLEXPORT bool
 ts_catalog_database_info_become_owner(CatalogDatabaseInfo *database_info,
-									  CatalogSecurityContext *sec_ctx)
-{
+									  CatalogSecurityContext *sec_ctx) {
 	GetUserIdAndSecContext(&sec_ctx->saved_uid, &sec_ctx->saved_security_context);
 
-	if (sec_ctx->saved_uid != database_info->owner_uid)
-	{
+	if (sec_ctx->saved_uid != database_info->owner_uid) {
 		SetUserIdAndSecContext(database_info->owner_uid,
 							   sec_ctx->saved_security_context | SECURITY_LOCAL_USERID_CHANGE);
 		return true;
@@ -622,24 +571,19 @@ ts_catalog_database_info_become_owner(CatalogDatabaseInfo *database_info,
  * with ts_catalog_database_info_become_owner().
  */
 TSDLLEXPORT void
-ts_catalog_restore_user(CatalogSecurityContext *sec_ctx)
-{
+ts_catalog_restore_user(CatalogSecurityContext *sec_ctx) {
 	SetUserIdAndSecContext(sec_ctx->saved_uid, sec_ctx->saved_security_context);
 }
 
 /*
  * Insert a new row into a catalog table.
  */
-void
-ts_catalog_insert_only(Relation rel, HeapTuple tuple)
-{
+void ts_catalog_insert_only(Relation rel, HeapTuple tuple) {
 	CatalogTupleInsert(rel, tuple);
 	ts_catalog_invalidate_cache(RelationGetRelid(rel), CMD_INSERT);
 }
 
-void
-ts_catalog_insert(Relation rel, HeapTuple tuple)
-{
+void ts_catalog_insert(Relation rel, HeapTuple tuple) {
 	ts_catalog_insert_only(rel, tuple);
 	/* Make changes visible */
 	CommandCounterIncrement();
@@ -649,58 +593,44 @@ ts_catalog_insert(Relation rel, HeapTuple tuple)
  * Insert a new row into a catalog table.
  */
 TSDLLEXPORT void
-ts_catalog_insert_values(Relation rel, TupleDesc tupdesc, Datum *values, bool *nulls)
-{
+ts_catalog_insert_values(Relation rel, TupleDesc tupdesc, Datum *values, bool *nulls) {
 	HeapTuple tuple = heap_form_tuple(tupdesc, values, nulls);
 
 	ts_catalog_insert(rel, tuple);
 	heap_freetuple(tuple);
 }
 
-void
-ts_catalog_update_tid_only(Relation rel, ItemPointer tid, HeapTuple tuple)
-{
+void ts_catalog_update_tid_only(Relation rel, ItemPointer tid, HeapTuple tuple) {
 	CatalogTupleUpdate(rel, tid, tuple);
 	ts_catalog_invalidate_cache(RelationGetRelid(rel), CMD_UPDATE);
 }
 
-void
-ts_catalog_update_tid(Relation rel, ItemPointer tid, HeapTuple tuple)
-{
+void ts_catalog_update_tid(Relation rel, ItemPointer tid, HeapTuple tuple) {
 	ts_catalog_update_tid_only(rel, tid, tuple);
 	/* Make changes visible */
 	CommandCounterIncrement();
 }
 
 TSDLLEXPORT void
-ts_catalog_update(Relation rel, HeapTuple tuple)
-{
+ts_catalog_update(Relation rel, HeapTuple tuple) {
 	ts_catalog_update_tid(rel, &tuple->t_self, tuple);
 }
 
-void
-ts_catalog_delete_tid_only(Relation rel, ItemPointer tid)
-{
+void ts_catalog_delete_tid_only(Relation rel, ItemPointer tid) {
 	CatalogTupleDelete(rel, tid);
 	ts_catalog_invalidate_cache(RelationGetRelid(rel), CMD_DELETE);
 }
 
-void
-ts_catalog_delete_tid(Relation rel, ItemPointer tid)
-{
+void ts_catalog_delete_tid(Relation rel, ItemPointer tid) {
 	ts_catalog_delete_tid_only(rel, tid);
 	CommandCounterIncrement();
 }
 
-void
-ts_catalog_delete_only(Relation rel, HeapTuple tuple)
-{
+void ts_catalog_delete_only(Relation rel, HeapTuple tuple) {
 	ts_catalog_delete_tid_only(rel, &tuple->t_self);
 }
 
-void
-ts_catalog_delete(Relation rel, HeapTuple tuple)
-{
+void ts_catalog_delete(Relation rel, HeapTuple tuple) {
 	ts_catalog_delete_tid(rel, &tuple->t_self);
 }
 
@@ -726,21 +656,17 @@ ts_catalog_delete(Relation rel, HeapTuple tuple)
  * Parameters: The OID of the catalog table that changed, and the operation
  * involved (e.g., INSERT, UPDATE, DELETE).
  */
-void
-ts_catalog_invalidate_cache(Oid catalog_relid, CmdType operation)
-{
+void ts_catalog_invalidate_cache(Oid catalog_relid, CmdType operation) {
 	Catalog *catalog = ts_catalog_get();
 	CatalogTable table = catalog_get_table(catalog, catalog_relid);
 	Oid relid;
 
-	switch (table)
-	{
+	switch (table) {
 		case CHUNK:
 		case CHUNK_CONSTRAINT:
 		case CHUNK_DATA_NODE:
 		case DIMENSION_SLICE:
-			if (operation == CMD_UPDATE || operation == CMD_DELETE)
-			{
+			if (operation == CMD_UPDATE || operation == CMD_DELETE) {
 				relid = ts_catalog_get_cache_proxy_id(catalog, CACHE_TYPE_HYPERTABLE);
 				CacheInvalidateRelcacheByRelid(relid);
 			}
@@ -765,8 +691,7 @@ ts_catalog_invalidate_cache(Oid catalog_relid, CmdType operation)
 /* Scanner helper functions specifically for the catalog tables */
 TSDLLEXPORT bool
 ts_catalog_scan_one(CatalogTable table, int indexid, ScanKeyData *scankey, int num_keys,
-					tuple_found_func tuple_found, LOCKMODE lockmode, char *table_name, void *data)
-{
+					tuple_found_func tuple_found, LOCKMODE lockmode, char *table_name, void *data) {
 	Catalog *catalog = ts_catalog_get();
 
 	ScannerCtx scanctx = {
@@ -785,8 +710,7 @@ ts_catalog_scan_one(CatalogTable table, int indexid, ScanKeyData *scankey, int n
 
 TSDLLEXPORT void
 ts_catalog_scan_all(CatalogTable table, int indexid, ScanKeyData *scankey, int num_keys,
-					tuple_found_func tuple_found, LOCKMODE lockmode, void *data)
-{
+					tuple_found_func tuple_found, LOCKMODE lockmode, void *data) {
 	Catalog *catalog = ts_catalog_get();
 
 	ScannerCtx scanctx = {

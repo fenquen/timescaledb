@@ -14,15 +14,14 @@
  *	DimensionVec is a collection of slices (ranges) along one dimension for a
  *	time range.
  */
-typedef struct DimensionVec
-{
-	int32 capacity;   /* The capacity of the slices array */
+typedef struct DimensionVec {
+	int32 capacity;	  /* The capacity of the slices array */
 	int32 num_slices; /* The current number of slices in slices
 					   * array */
 	DimensionSlice *slices[FLEXIBLE_ARRAY_MEMBER];
 } DimensionVec;
 
-#define DIMENSION_VEC_SIZE(num_slices)                                                             \
+#define DIMENSION_VEC_SIZE(num_slices) \
 	(sizeof(DimensionVec) + sizeof(DimensionSlice *) * num_slices)
 
 #define DIMENSION_VEC_DEFAULT_SIZE 10

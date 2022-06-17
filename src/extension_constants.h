@@ -21,8 +21,7 @@
 	(8 + NAMEDATALEN + 1 + MAX_VERSION_LEN) /* "$libdir/"+extname+"-"+version                      \
 											 * */
 
-typedef enum TsExtensionSchemas
-{
+typedef enum TsExtensionSchemas {
 	TS_CATALOG_SCHEMA,
 	TS_INTERNAL_SCHEMA,
 	TS_CACHE_SCHEMA,

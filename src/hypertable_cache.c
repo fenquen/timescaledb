@@ -18,48 +18,42 @@
 #include "dimension.h"
 #include "ts_catalog/tablespace.h"
 
-static void *hypertable_cache_create_entry(Cache *cache, CacheQuery *query);
+static void *hypertable_cache_create_entry(Cache *cache, CacheQuery *cacheQuery);
 static void hypertable_cache_missing_error(const Cache *cache, const CacheQuery *query);
 
-typedef struct HypertableCacheQuery
-{
-	CacheQuery q;
+// cache的获取请求
+typedef struct HypertableCacheQuery {
+	CacheQuery cacheQuery;
 	Oid relid;
 	const char *schema;
 	const char *table;
 } HypertableCacheQuery;
 
-static void *
-hypertable_cache_get_key(CacheQuery *query)
-{
-	return &((HypertableCacheQuery *) query)->relid;
+static void *hypertable_cache_get_key(CacheQuery *cacheQuery) {
+	return &((HypertableCacheQuery *) cacheQuery)->relid;
 }
 
-typedef struct
-{
+// 代表1个缓存条目
+typedef struct {
 	Oid relid;
 	Hypertable *hypertable;
 } HypertableCacheEntry;
 
 static bool
-hypertable_cache_valid_result(const void *result)
-{
+hypertable_cache_valid_result(const void *result) {
 	if (result == NULL)
 		return false;
 	return ((HypertableCacheEntry *) result)->hypertable != NULL;
 }
 
 static Cache *
-hypertable_cache_create()
-{
+hypertable_cache_create() {
 	MemoryContext ctx =
 		AllocSetContextCreate(CacheMemoryContext, "Hypertable cache", ALLOCSET_DEFAULT_SIZES);
 
 	Cache *cache = MemoryContextAlloc(ctx, sizeof(Cache));
-	Cache		template =
-	{
-		.hctl =
-		{
+	Cache template = {
+		.hashctl = {
 			.keysize = sizeof(Oid),
 			.entrysize = sizeof(HypertableCacheEntry),
 			.hcxt = ctx,
@@ -82,59 +76,51 @@ hypertable_cache_create()
 
 static Cache *hypertable_cache_current = NULL;
 
-static ScanTupleResult
-hypertable_tuple_found(TupleInfo *ti, void *data)
-{
+static ScanTupleResult hypertable_tuple_found(TupleInfo *tupleInfo, void *data) {
 	HypertableCacheEntry *entry = data;
 
-	entry->hypertable = ts_hypertable_from_tupleinfo(ti);
+	entry->hypertable = ts_hypertable_from_tupleinfo(tupleInfo);
 	return SCAN_DONE;
 }
 
-static void *
-hypertable_cache_create_entry(Cache *cache, CacheQuery *query)
-{
-	HypertableCacheQuery *hq = (HypertableCacheQuery *) query;
-	HypertableCacheEntry *cache_entry = query->result;
-	int number_found;
+static void *hypertable_cache_create_entry(Cache *cache, CacheQuery *cacheQuery) {
+	HypertableCacheQuery *hypertableCacheQuery = (HypertableCacheQuery *) cacheQuery;
+	HypertableCacheEntry *hypertableCacheEntry = cacheQuery->result;
 
-	if (NULL == hq->schema)
-		hq->schema = get_namespace_name(get_rel_namespace(hq->relid));
+	if (NULL == hypertableCacheQuery->schema) {
+		hypertableCacheQuery->schema = get_namespace_name(get_rel_namespace(hypertableCacheQuery->relid));
+	}
 
-	if (NULL == hq->table)
-		hq->table = get_rel_name(hq->relid);
+	if (NULL == hypertableCacheQuery->table) {
+		hypertableCacheQuery->table = get_rel_name(hypertableCacheQuery->relid);
+	}
 
-	number_found = ts_hypertable_scan_with_memory_context(hq->schema,
-														  hq->table,
-														  hypertable_tuple_found,
-														  query->result,
-														  AccessShareLock,
-														  false,
-														  ts_cache_memory_ctx(cache));
+	int number_found = ts_hypertable_scan_with_memory_context(hypertableCacheQuery->schema,
+															  hypertableCacheQuery->table,
+															  hypertable_tuple_found,
+															  cacheQuery->result,
+															  AccessShareLock,
+															  false,
+															  ts_cache_memory_ctx(cache));
 
-	switch (number_found)
-	{
+	switch (number_found) {
 		case 0:
 			/* Negative cache entry: table is not a hypertable */
-			cache_entry->hypertable = NULL;
+			hypertableCacheEntry->hypertable = NULL;
 			break;
 		case 1:
-			Assert(strncmp(cache_entry->hypertable->fd.schema_name.data, hq->schema, NAMEDATALEN) ==
-				   0);
-			Assert(strncmp(cache_entry->hypertable->fd.table_name.data, hq->table, NAMEDATALEN) ==
-				   0);
+			Assert(strncmp(hypertableCacheEntry->hypertable->fd.schema_name.data, hypertableCacheQuery->schema, NAMEDATALEN) == 0);
+			Assert(strncmp(hypertableCacheEntry->hypertable->fd.table_name.data, hypertableCacheQuery->table, NAMEDATALEN) == 0);
 			break;
 		default:
 			elog(ERROR, "got an unexpected number of records: %d", number_found);
 			break;
 	}
 
-	return cache_entry->hypertable == NULL ? NULL : cache_entry;
+	return hypertableCacheEntry->hypertable == NULL ? NULL : hypertableCacheEntry;
 }
 
-static void
-hypertable_cache_missing_error(const Cache *cache, const CacheQuery *query)
-{
+static void hypertable_cache_missing_error(const Cache *cache, const CacheQuery *query) {
 	HypertableCacheQuery *hq = (HypertableCacheQuery *) query;
 	const char *const rel_name = get_rel_name(hq->relid);
 
@@ -148,82 +134,79 @@ hypertable_cache_missing_error(const Cache *cache, const CacheQuery *query)
 				 errmsg("table \"%s\" is not a hypertable", rel_name)));
 }
 
-void
-ts_hypertable_cache_invalidate_callback(void)
-{
+void ts_hypertable_cache_invalidate_callback(void) {
 	ts_cache_invalidate(hypertable_cache_current);
 	hypertable_cache_current = hypertable_cache_create();
 }
 
 /* Get hypertable cache entry. If the entry is not in the cache, add it. */
-Hypertable *
-ts_hypertable_cache_get_entry(Cache *const cache, const Oid relid, const unsigned int flags)
-{
-	if (!OidIsValid(relid))
-	{
-		if (flags & CACHE_FLAG_MISSING_OK)
+Hypertable *ts_hypertable_cache_get_entry(Cache *const cache,
+										  const Oid tableOid,
+										  const unsigned int cacheQueryFlags) {
+	if (!OidIsValid(tableOid)) {
+		if (cacheQueryFlags & CACHE_FLAG_MISSING_OK) {
 			return NULL;
-		else
-			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("invalid Oid")));
+		}
+
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("invalid Oid")));
 	}
 
-	return ts_hypertable_cache_get_entry_with_table(cache, relid, NULL, NULL, flags);
+	return ts_hypertable_cache_get_entry_with_table(cache, tableOid, NULL, NULL, cacheQueryFlags);
+}
+
+Hypertable *ts_hypertable_cache_get_entry_with_table(Cache *cache,
+													 const Oid tableOid,
+													 const char *schemaName,
+													 const char *tableName,
+													 const unsigned int cacheQueryFlags) {
+	// 组装cache的获取请求
+	HypertableCacheQuery hypertableCacheQuery = {
+		.cacheQuery.flags = cacheQueryFlags,
+		.relid = tableOid,
+		.schema = schemaName,
+		.table = tableName,
+	};
+
+	// 使用该请求获取cache
+	HypertableCacheEntry *hypertableCacheEntry = ts_cache_fetch(cache, &hypertableCacheQuery.cacheQuery);
+	Assert((cacheQueryFlags & CACHE_FLAG_MISSING_OK) ? true : (hypertableCacheEntry != NULL && hypertableCacheEntry->hypertable != NULL));
+	return hypertableCacheEntry == NULL ? NULL : hypertableCacheEntry->hypertable;
 }
 
 /*
  * Returns cache into the argument and hypertable as the function result.
  * If hypertable is not found, fails with an error.
  */
-Hypertable *
-ts_hypertable_cache_get_cache_and_entry(const Oid relid, const unsigned int flags,
-										Cache **const cache)
-{
+Hypertable *ts_hypertable_cache_get_cache_and_entry(const Oid tableOid,
+													const unsigned int cacheQueryFlags,
+													Cache **const cache) {
+	// 得到当全局的 hypertable_cache_current 把它放到 cache_pin 再把 cache_pin 加到 pinned_caches
+
+
 	*cache = ts_hypertable_cache_pin();
-	return ts_hypertable_cache_get_entry(*cache, relid, flags);
+
+	return ts_hypertable_cache_get_entry(*cache, tableOid, cacheQueryFlags);
 }
 
 Hypertable *
-ts_hypertable_cache_get_entry_rv(Cache *cache, const RangeVar *rv)
-{
+ts_hypertable_cache_get_entry_rv(Cache *cache, const RangeVar *rv) {
 	return ts_hypertable_cache_get_entry(cache, RangeVarGetRelid(rv, NoLock, true), true);
 }
 
 TSDLLEXPORT Hypertable *
-ts_hypertable_cache_get_entry_by_id(Cache *cache, const int32 hypertable_id)
-{
+ts_hypertable_cache_get_entry_by_id(Cache *cache, const int32 hypertable_id) {
 	return ts_hypertable_cache_get_entry(cache, ts_hypertable_id_to_relid(hypertable_id), true);
 }
 
-Hypertable *
-ts_hypertable_cache_get_entry_with_table(Cache *cache, const Oid relid, const char *schema,
-										 const char *table, const unsigned int flags)
-{
-	HypertableCacheQuery query = {
-		.q.flags = flags,
-		.relid = relid,
-		.schema = schema,
-		.table = table,
-	};
-	HypertableCacheEntry *entry = ts_cache_fetch(cache, &query.q);
-	Assert((flags & CACHE_FLAG_MISSING_OK) ? true : (entry != NULL && entry->hypertable != NULL));
-	return entry == NULL ? NULL : entry->hypertable;
-}
-
-extern TSDLLEXPORT Cache *
-ts_hypertable_cache_pin()
-{
+extern TSDLLEXPORT Cache *ts_hypertable_cache_pin() {
 	return ts_cache_pin(hypertable_cache_current);
 }
 
-void
-_hypertable_cache_init(void)
-{
+void _hypertable_cache_init(void) {
 	CreateCacheMemoryContext();
 	hypertable_cache_current = hypertable_cache_create();
 }
 
-void
-_hypertable_cache_fini(void)
-{
+void _hypertable_cache_fini(void) {
 	ts_cache_invalidate(hypertable_cache_current);
 }

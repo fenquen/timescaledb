@@ -204,7 +204,7 @@ connection_cache_create(void)
 
 	*cache = (Cache)
 	{
-		.hctl = {
+		.hashctl = {
 			.keysize = sizeof(TSConnectionId),
 			.entrysize = sizeof(ConnectionCacheEntry),
 			.hcxt = ctx,

@@ -20,15 +20,13 @@ typedef struct PartitioningInfo PartitioningInfo;
 typedef struct DimensionSlice DimensionSlice;
 typedef struct DimensionVec DimensionVec;
 
-typedef enum DimensionType
-{
+typedef enum DimensionType {
 	DIMENSION_TYPE_OPEN,
 	DIMENSION_TYPE_CLOSED,
 	DIMENSION_TYPE_ANY,
 } DimensionType;
 
-typedef struct Dimension
-{
+typedef struct Dimension {
 	FormData_dimension fd;
 	DimensionType type;
 	AttrNumber column_attno;
@@ -38,14 +36,13 @@ typedef struct Dimension
 
 #define IS_OPEN_DIMENSION(d) ((d)->type == DIMENSION_TYPE_OPEN)
 #define IS_CLOSED_DIMENSION(d) ((d)->type == DIMENSION_TYPE_CLOSED)
-#define IS_VALID_OPEN_DIM_TYPE(type)                                                               \
+#define IS_VALID_OPEN_DIM_TYPE(type) \
 	(IS_INTEGER_TYPE(type) || IS_TIMESTAMP_TYPE(type) || ts_type_is_int8_binary_compatible(type))
 
 /*
  * A hyperspace defines how to partition in a N-dimensional space.
  */
-typedef struct Hyperspace
-{
+typedef struct Hyperspace {
 	int32 hypertable_id;
 	Oid main_table_relid;
 	uint16 capacity;
@@ -54,14 +51,13 @@ typedef struct Hyperspace
 	Dimension dimensions[FLEXIBLE_ARRAY_MEMBER];
 } Hyperspace;
 
-#define HYPERSPACE_SIZE(num_dimensions)                                                            \
+#define HYPERSPACE_SIZE(num_dimensions) \
 	(sizeof(Hyperspace) + (sizeof(Dimension) * (num_dimensions)))
 
 /*
  * A point in an N-dimensional hyperspace.
  */
-typedef struct Point
-{
+typedef struct Point {
 	int16 cardinality;
 	uint8 num_coords;
 	/* Open dimension coordinates are stored before the closed coordinates */
@@ -80,8 +76,7 @@ typedef struct Hypertable Hypertable;
 /*
  * Dimension information used to validate, create and update dimensions.
  */
-typedef struct DimensionInfo
-{
+typedef struct DimensionInfo {
 	Oid table_relid;
 	int32 dimension_id;
 	Name colname;
@@ -100,7 +95,7 @@ typedef struct DimensionInfo
 	Hypertable *ht;
 } DimensionInfo;
 
-#define DIMENSION_INFO_IS_SET(di)                                                                  \
+#define DIMENSION_INFO_IS_SET(di) \
 	(di != NULL && OidIsValid((di)->table_relid) && (di)->colname != NULL)
 
 extern Hyperspace *ts_dimension_scan(int32 hypertable_id, Oid main_table_relid, int16 num_dimension,
@@ -128,9 +123,9 @@ extern Datum ts_dimension_transform_value(const Dimension *dim, Oid collation, D
 										  Oid const_datum_type, Oid *restype);
 extern int ts_dimension_delete_by_hypertable_id(int32 hypertable_id, bool delete_slices);
 
-extern TSDLLEXPORT DimensionInfo *ts_dimension_info_create_open(Oid table_relid, Name column_name,
-																Datum interval, Oid interval_type,
-																regproc partitioning_func);
+extern TSDLLEXPORT DimensionInfo *ts_dimension_info_create_open(Oid tableOid, Name timeColumnName,
+																Datum interval, Oid intervalType,
+																regproc partitioningFunc);
 
 extern TSDLLEXPORT DimensionInfo *ts_dimension_info_create_closed(Oid table_relid, Name column_name,
 																  int32 num_slices,
@@ -145,9 +140,9 @@ extern TSDLLEXPORT void ts_dimension_update(const Hypertable *ht, const NameData
 											Oid *integer_now_func);
 extern TSDLLEXPORT List *ts_dimension_get_partexprs(const Dimension *dim, Index hyper_varno);
 
-#define hyperspace_get_open_dimension(space, i)                                                    \
+#define hyperspace_get_open_dimension(space, i) \
 	ts_hyperspace_get_dimension(space, DIMENSION_TYPE_OPEN, i)
-#define hyperspace_get_closed_dimension(space, i)                                                  \
+#define hyperspace_get_closed_dimension(space, i) \
 	ts_hyperspace_get_dimension(space, DIMENSION_TYPE_CLOSED, i)
 
 #endif /* TIMESCALEDB_DIMENSION_H */

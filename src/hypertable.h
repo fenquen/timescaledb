@@ -31,8 +31,7 @@ typedef struct Hypercube Hypercube;
  * but don't have a corresponding internal table on the access
  * node
  */
-enum
-{
+enum {
 	HypertableCompressionOff = 0,
 	HypertableCompressionEnabled = 1,
 	HypertableInternalCompressionTable = 2,
@@ -40,13 +39,13 @@ enum
 
 #define TS_HYPERTABLE_HAS_COMPRESSION_TABLE(ht) ts_hypertable_has_compression_table(ht)
 
-#define TS_HYPERTABLE_HAS_COMPRESSION_ENABLED(ht)                                                  \
+#define TS_HYPERTABLE_HAS_COMPRESSION_ENABLED(ht) \
 	((ht)->fd.compression_state == HypertableCompressionEnabled)
 
-#define TS_HYPERTABLE_IS_INTERNAL_COMPRESSION_TABLE(ht)                                            \
+#define TS_HYPERTABLE_IS_INTERNAL_COMPRESSION_TABLE(ht) \
 	((ht)->fd.compression_state == HypertableInternalCompressionTable)
-typedef struct Hypertable
-{
+
+typedef struct Hypertable {
 	FormData_hypertable fd;
 	Oid main_table_relid;
 	Oid chunk_sizing_func;
@@ -60,8 +59,7 @@ typedef struct Hypertable
 } Hypertable;
 
 /* create_hypertable record attribute numbers */
-enum Anum_create_hypertable
-{
+enum Anum_create_hypertable {
 	Anum_create_hypertable_id = 1,
 	Anum_create_hypertable_schema_name,
 	Anum_create_hypertable_table_name,
@@ -74,16 +72,14 @@ enum Anum_create_hypertable
 extern TSDLLEXPORT Oid ts_rel_get_owner(Oid relid);
 extern List *ts_hypertable_get_all(void);
 
-typedef enum HypertableCreateFlags
-{
+typedef enum HypertableCreateFlags {
 	HYPERTABLE_CREATE_DISABLE_DEFAULT_INDEXES = 1 << 0,
 	HYPERTABLE_CREATE_IF_NOT_EXISTS = 1 << 1,
 	HYPERTABLE_CREATE_MIGRATE_DATA = 1 << 2,
 } HypertableCreateFlags;
 
 /* Hypertable type defined by replication_factor value */
-typedef enum HypertableType
-{
+typedef enum HypertableType {
 	/* Hypertable created on a data node as part of any other
 	 * distributed hypertable */
 	HYPERTABLE_DISTRIBUTED_MEMBER = -1,
@@ -108,10 +104,10 @@ extern TSDLLEXPORT Oid ts_hypertable_permissions_check(Oid hypertable_oid, Oid u
 
 extern TSDLLEXPORT void ts_hypertable_permissions_check_by_id(int32 hypertable_id);
 extern Hypertable *ts_hypertable_from_tupleinfo(const TupleInfo *ti);
-extern int ts_hypertable_scan_with_memory_context(const char *schema, const char *table,
-												  tuple_found_func tuple_found, void *data,
+extern int ts_hypertable_scan_with_memory_context(const char *schemaName, const char *tableName,
+												  tuple_found_func tupleFoundFunc, void *data,
 												  LOCKMODE lockmode, bool tuplock,
-												  MemoryContext mctx);
+												  MemoryContext memoryContext);
 extern TM_Result ts_hypertable_lock_tuple(Oid table_relid);
 extern bool ts_hypertable_lock_tuple_simple(Oid table_relid);
 extern TSDLLEXPORT int ts_hypertable_update(Hypertable *ht);
@@ -159,8 +155,8 @@ extern TSDLLEXPORT List *ts_hypertable_get_available_data_node_server_oids(const
 extern TSDLLEXPORT HypertableType ts_hypertable_get_type(const Hypertable *ht);
 extern TSDLLEXPORT void ts_hypertable_func_call_on_data_nodes(const Hypertable *ht,
 															  FunctionCallInfo fcinfo);
-extern TSDLLEXPORT int16 ts_validate_replication_factor(int32 replication_factor, bool is_null,
-														bool is_dist_call);
+extern TSDLLEXPORT int16 ts_validate_replication_factor(int32 replicationFactor, bool isNull,
+														bool isDistCall);
 extern TSDLLEXPORT Datum ts_hypertable_get_open_dim_max_value(const Hypertable *ht,
 															  int dimension_index, bool *isnull);
 
@@ -169,22 +165,22 @@ extern TSDLLEXPORT void ts_hypertable_formdata_fill(FormData_hypertable *fd, con
 extern TSDLLEXPORT void ts_hypertable_scan_by_name(ScanIterator *iterator, const char *schema,
 												   const char *name);
 
-#define hypertable_scan(schema, table, tuple_found, data, lockmode, tuplock)                       \
-	ts_hypertable_scan_with_memory_context(schema,                                                 \
-										   table,                                                  \
-										   tuple_found,                                            \
-										   data,                                                   \
-										   lockmode,                                               \
-										   tuplock,                                                \
+#define hypertable_scan(schema, table, tuple_found, data, lockmode, tuplock) \
+	ts_hypertable_scan_with_memory_context(schema,                           \
+										   table,                            \
+										   tuple_found,                      \
+										   data,                             \
+										   lockmode,                         \
+										   tuplock,                          \
 										   CurrentMemoryContext)
 
-#define hypertable_adaptive_chunking_enabled(ht)                                                   \
+#define hypertable_adaptive_chunking_enabled(ht) \
 	(OidIsValid((ht)->chunk_sizing_func) && (ht)->fd.chunk_target_size > 0)
 
 #define hypertable_is_distributed(ht) ((ht)->fd.replication_factor > 0)
-#define hypertable_chunk_relkind(ht)                                                               \
+#define hypertable_chunk_relkind(ht) \
 	(hypertable_is_distributed(ht) ? RELKIND_FOREIGN_TABLE : RELKIND_RELATION)
-#define hypertable_is_distributed_member(ht)                                                       \
+#define hypertable_is_distributed_member(ht) \
 	((ht)->fd.replication_factor == HYPERTABLE_DISTRIBUTED_MEMBER)
 
 #endif /* TIMESCALEDB_HYPERTABLE_H */
