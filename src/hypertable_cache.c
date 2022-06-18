@@ -24,7 +24,7 @@ static void hypertable_cache_missing_error(const Cache *cache, const CacheQuery 
 // cache的获取请求
 typedef struct HypertableCacheQuery {
 	CacheQuery cacheQuery;
-	Oid relid;
+	Oid relid; // targetTableOid
 	const char *schema;
 	const char *table;
 } HypertableCacheQuery;
@@ -95,6 +95,7 @@ static void *hypertable_cache_create_entry(Cache *cache, CacheQuery *cacheQuery)
 		hypertableCacheQuery->table = get_rel_name(hypertableCacheQuery->relid);
 	}
 
+	// 应该是去scan  _timescaledb_catalog.hypertable表
 	int number_found = ts_hypertable_scan_with_memory_context(hypertableCacheQuery->schema,
 															  hypertableCacheQuery->table,
 															  hypertable_tuple_found,
@@ -141,9 +142,9 @@ void ts_hypertable_cache_invalidate_callback(void) {
 
 /* Get hypertable cache entry. If the entry is not in the cache, add it. */
 Hypertable *ts_hypertable_cache_get_entry(Cache *const cache,
-										  const Oid tableOid,
+										  const Oid targetTableOid,
 										  const unsigned int cacheQueryFlags) {
-	if (!OidIsValid(tableOid)) {
+	if (!OidIsValid(targetTableOid)) {
 		if (cacheQueryFlags & CACHE_FLAG_MISSING_OK) {
 			return NULL;
 		}
@@ -151,18 +152,18 @@ Hypertable *ts_hypertable_cache_get_entry(Cache *const cache,
 		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("invalid Oid")));
 	}
 
-	return ts_hypertable_cache_get_entry_with_table(cache, tableOid, NULL, NULL, cacheQueryFlags);
+	return ts_hypertable_cache_get_entry_with_table(cache, targetTableOid, NULL, NULL, cacheQueryFlags);
 }
 
 Hypertable *ts_hypertable_cache_get_entry_with_table(Cache *cache,
-													 const Oid tableOid,
+													 const Oid targetTableOid,
 													 const char *schemaName,
 													 const char *tableName,
 													 const unsigned int cacheQueryFlags) {
 	// 组装cache的获取请求
 	HypertableCacheQuery hypertableCacheQuery = {
 		.cacheQuery.flags = cacheQueryFlags,
-		.relid = tableOid,
+		.relid = targetTableOid,
 		.schema = schemaName,
 		.table = tableName,
 	};
@@ -177,7 +178,7 @@ Hypertable *ts_hypertable_cache_get_entry_with_table(Cache *cache,
  * Returns cache into the argument and hypertable as the function result.
  * If hypertable is not found, fails with an error.
  */
-Hypertable *ts_hypertable_cache_get_cache_and_entry(const Oid tableOid,
+Hypertable *ts_hypertable_cache_get_cache_and_entry(const Oid targetTableOid,
 													const unsigned int cacheQueryFlags,
 													Cache **const cache) {
 	// 得到当全局的 hypertable_cache_current 把它放到 cache_pin 再把 cache_pin 加到 pinned_caches
@@ -185,7 +186,7 @@ Hypertable *ts_hypertable_cache_get_cache_and_entry(const Oid tableOid,
 
 	*cache = ts_hypertable_cache_pin();
 
-	return ts_hypertable_cache_get_entry(*cache, tableOid, cacheQueryFlags);
+	return ts_hypertable_cache_get_entry(*cache, targetTableOid, cacheQueryFlags);
 }
 
 Hypertable *

@@ -394,8 +394,7 @@ TSDLLEXPORT int ts_scanner_scan(ScannerCtx *scannerCtx) {
 
 	TupleInfo *tupleInfo;
 
-	for (ts_scanner_start_scan(scannerCtx);
-		 (tupleInfo = ts_scanner_next(scannerCtx));) {
+	for (ts_scanner_start_scan(scannerCtx); (tupleInfo = ts_scanner_next(scannerCtx));) {
 		/* Call tuple_found handler. Abort the scan if the handler wants us to */
 		if (scannerCtx->tuple_found != NULL &&
 			scannerCtx->tuple_found(tupleInfo, scannerCtx->data) == SCAN_DONE) {

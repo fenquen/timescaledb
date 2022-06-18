@@ -30,12 +30,10 @@
 #include "partitioning.h"
 
 static bool
-index_has_attribute(const List *indexelems, const char *attrname)
-{
+index_has_attribute(const List *indexelems, const char *attrname) {
 	ListCell *lc;
 
-	foreach (lc, indexelems)
-	{
+	foreach (lc, indexelems) {
 		Node *node = lfirst(lc);
 		const char *colname = NULL;
 
@@ -43,21 +41,18 @@ index_has_attribute(const List *indexelems, const char *attrname)
 		 * The type of the element varies depending on whether the list is
 		 * from an index or a constraint
 		 */
-		switch (nodeTag(node))
-		{
+		switch (nodeTag(node)) {
 			case T_IndexElem:
 				colname = ((IndexElem *) node)->name;
 				break;
 			case T_String:
 				colname = strVal(node);
 				break;
-			case T_List:
-			{
+			case T_List: {
 				List *pair = lfirst_node(List, lc);
 
 				if (list_length(pair) == 2 && IsA(linitial(pair), IndexElem) &&
-					IsA(lsecond(pair), List))
-				{
+					IsA(lsecond(pair), List)) {
 					colname = ((IndexElem *) linitial(pair))->name;
 					break;
 				}
@@ -82,13 +77,10 @@ index_has_attribute(const List *indexelems, const char *attrname)
  * entire hypertable. Therefore we check that all dimensions are present among
  * the index columns.
  */
-void
-ts_indexing_verify_columns(const Hyperspace *hs, const List *indexelems)
-{
+void ts_indexing_verify_columns(const Hyperspace *hs, const List *indexelems) {
 	int i;
 
-	for (i = 0; i < hs->num_dimensions; i++)
-	{
+	for (i = 0; i < hs->num_dimensions; i++) {
 		const Dimension *dim = &hs->dimensions[i];
 
 		if (!index_has_attribute(indexelems, NameStr(dim->fd.column_name)))
@@ -105,9 +97,7 @@ ts_indexing_verify_columns(const Hyperspace *hs, const List *indexelems)
  *
  * We only care about UNIQUE, PRIMARY KEY or EXCLUSION indexes.
  */
-void
-ts_indexing_verify_index(const Hyperspace *hs, const IndexStmt *stmt)
-{
+void ts_indexing_verify_index(const Hyperspace *hs, const IndexStmt *stmt) {
 	if (stmt->unique || stmt->excludeOpNames != NULL)
 		ts_indexing_verify_columns(hs, stmt->indexParams);
 }
@@ -116,13 +106,11 @@ ts_indexing_verify_index(const Hyperspace *hs, const IndexStmt *stmt)
  * Build a list of string Values representing column names that an index covers.
  */
 static List *
-build_indexcolumn_list(const Relation idxrel)
-{
+build_indexcolumn_list(const Relation idxrel) {
 	List *columns = NIL;
 	int i;
 
-	for (i = 0; i < idxrel->rd_att->natts; i++)
-	{
+	for (i = 0; i < idxrel->rd_att->natts; i++) {
 		Form_pg_attribute idxattr = TupleDescAttr(idxrel->rd_att, i);
 
 		columns = lappend(columns, makeString(NameStr(idxattr->attname)));
@@ -132,8 +120,7 @@ build_indexcolumn_list(const Relation idxrel)
 }
 
 static void
-create_default_index(const Hypertable *ht, List *indexelems)
-{
+create_default_index(const Hypertable *ht, List *indexelems) {
 	IndexStmt stmt = {
 		.type = T_IndexStmt,
 		.accessMethod = DEFAULT_INDEX_TYPE,
@@ -158,8 +145,7 @@ create_default_index(const Hypertable *ht, List *indexelems)
 }
 
 static const Node *
-get_open_dim_expr(const Dimension *dim)
-{
+get_open_dim_expr(const Dimension *dim) {
 	if (dim == NULL || dim->partitioning == NULL)
 		return NULL;
 
@@ -167,8 +153,7 @@ get_open_dim_expr(const Dimension *dim)
 }
 
 static const char *
-get_open_dim_name(const Dimension *dim)
-{
+get_open_dim_name(const Dimension *dim) {
 	if (dim == NULL || dim->partitioning != NULL)
 		return NULL;
 
@@ -177,8 +162,7 @@ get_open_dim_name(const Dimension *dim)
 
 static void
 create_default_indexes(const Hypertable *ht, const Dimension *time_dim, const Dimension *space_dim,
-					   bool has_time_idx, bool has_time_space_idx)
-{
+					   bool has_time_idx, bool has_time_space_idx) {
 	const char *dimname = get_open_dim_name(time_dim);
 	IndexElem telem = {
 		.type = T_IndexElem,
@@ -196,8 +180,7 @@ create_default_indexes(const Hypertable *ht, const Dimension *time_dim, const Di
 		create_default_index(ht, list_make1(&telem));
 
 	/* Create ("space", "time") index */
-	if (space_dim != NULL && !has_time_space_idx)
-	{
+	if (space_dim != NULL && !has_time_space_idx) {
 		IndexElem selem = {
 			.type = T_IndexElem,
 			.name = pstrdup(NameStr(space_dim->fd.column_name)),
@@ -215,10 +198,9 @@ create_default_indexes(const Hypertable *ht, const Dimension *time_dim, const Di
  * Default indexes are assumed to cover the first open ("time") dimension, and,
  * optionally, the first closed ("space") dimension.
  */
-static void
-indexing_create_and_verify_hypertable_indexes(const Hypertable *ht, bool create_default,
-											  bool verify)
-{
+static void indexing_create_and_verify_hypertable_indexes(const Hypertable *ht,
+														  bool create_default,
+														  bool verify) {
 	Relation tblrel = table_open(ht->main_table_relid, AccessShareLock);
 	const Dimension *time_dim = ts_hyperspace_get_dimension(ht->space, DIMENSION_TYPE_OPEN, 0);
 	const Dimension *space_dim = ts_hyperspace_get_dimension(ht->space, DIMENSION_TYPE_CLOSED, 0);
@@ -227,20 +209,17 @@ indexing_create_and_verify_hypertable_indexes(const Hypertable *ht, bool create_
 	bool has_time_space_idx = false;
 	ListCell *lc;
 
-	foreach (lc, indexlist)
-	{
+	foreach (lc, indexlist) {
 		Relation idxrel = index_open(lfirst_oid(lc), AccessShareLock);
 
 		if (verify && (idxrel->rd_index->indisunique || idxrel->rd_index->indisexclusion))
 			ts_indexing_verify_columns(ht->space, build_indexcolumn_list(idxrel));
 
 		/* Check for existence of "default" indexes */
-		if (create_default && NULL != time_dim)
-		{
+		if (create_default && NULL != time_dim) {
 			Form_pg_attribute idxattr_time, idxattr_space;
 
-			switch (idxrel->rd_att->natts)
-			{
+			switch (idxrel->rd_att->natts) {
 				case 1:
 					/* ("time") index */
 					idxattr_time = TupleDescAttr(idxrel->rd_att, 0);
@@ -270,9 +249,7 @@ indexing_create_and_verify_hypertable_indexes(const Hypertable *ht, bool create_
 	table_close(tblrel, AccessShareLock);
 }
 
-bool
-ts_indexing_relation_has_primary_or_unique_index(Relation htrel)
-{
+bool ts_indexing_relation_has_primary_or_unique_index(Relation htrel) {
 	List *indexoidlist = RelationGetIndexList(htrel);
 	ListCell *lc;
 	bool result = false;
@@ -280,8 +257,7 @@ ts_indexing_relation_has_primary_or_unique_index(Relation htrel)
 	if (htrel->rd_pkindex != InvalidOid)
 		return true;
 
-	foreach (lc, indexoidlist)
-	{
+	foreach (lc, indexoidlist) {
 		Oid indexoid = lfirst_oid(lc);
 		HeapTuple index_tuple;
 		Form_pg_index index;
@@ -311,8 +287,7 @@ ts_indexing_relation_has_primary_or_unique_index(Relation htrel)
  */
 extern ObjectAddress
 ts_indexing_root_table_create_index(IndexStmt *stmt, const char *queryString,
-									bool is_multitransaction, bool is_distributed)
-{
+									bool is_multitransaction, bool is_distributed) {
 	Oid relid;
 	LOCKMODE lockmode;
 	ObjectAddress root_table_address;
@@ -345,14 +320,12 @@ ts_indexing_root_table_create_index(IndexStmt *stmt, const char *queryString,
 	 * table, i.e., we do not recurse to chunks. Therefore, there is no need to
 	 * take locks on the chunks here.
 	 */
-	if (!is_multitransaction && !is_distributed)
-	{
+	if (!is_multitransaction && !is_distributed) {
 		ListCell *lc;
 		List *inheritors = NIL;
 
 		inheritors = find_all_inheritors(relid, lockmode, NULL);
-		foreach (lc, inheritors)
-		{
+		foreach (lc, inheritors) {
 			char relkind = get_rel_relkind(lfirst_oid(lc));
 
 			/* Note, that unlike partitioned tables, we allow index creation
@@ -392,21 +365,16 @@ ts_indexing_root_table_create_index(IndexStmt *stmt, const char *queryString,
 	return root_table_address;
 }
 
-void
-ts_indexing_verify_indexes(const Hypertable *ht)
-{
+void ts_indexing_verify_indexes(const Hypertable *ht) {
 	indexing_create_and_verify_hypertable_indexes(ht, false, true);
 }
 
-void
-ts_indexing_create_default_indexes(const Hypertable *ht)
-{
-	indexing_create_and_verify_hypertable_indexes(ht, true, false);
+void ts_indexing_create_default_indexes(const Hypertable *hypertable) {
+	indexing_create_and_verify_hypertable_indexes(hypertable, true, false);
 }
 
 TSDLLEXPORT Oid
-ts_indexing_find_clustered_index(Oid table_relid)
-{
+ts_indexing_find_clustered_index(Oid table_relid) {
 	Relation rel;
 	ListCell *index;
 	Oid index_relid = InvalidOid;
@@ -414,8 +382,7 @@ ts_indexing_find_clustered_index(Oid table_relid)
 	rel = table_open(table_relid, AccessShareLock);
 
 	/* We need to find the index that has indisclustered set. */
-	foreach (index, RelationGetIndexList(rel))
-	{
+	foreach (index, RelationGetIndexList(rel)) {
 		HeapTuple idxtuple;
 		Form_pg_index indexForm;
 
@@ -427,8 +394,7 @@ ts_indexing_find_clustered_index(Oid table_relid)
 				 index_relid);
 		indexForm = (Form_pg_index) GETSTRUCT(idxtuple);
 
-		if (indexForm->indisclustered)
-		{
+		if (indexForm->indisclustered) {
 			ReleaseSysCache(idxtuple);
 			break;
 		}
@@ -441,15 +407,13 @@ ts_indexing_find_clustered_index(Oid table_relid)
 	return index_relid;
 }
 
-typedef enum IndexValidity
-{
+typedef enum IndexValidity {
 	IndexInvalid = 0,
 	IndexValid,
 } IndexValidity;
 
 static bool
-ts_indexing_mark_as(Oid index_id, IndexValidity validity)
-{
+ts_indexing_mark_as(Oid index_id, IndexValidity validity) {
 	Relation pg_index;
 	HeapTuple indexTuple;
 	HeapTuple new_tuple;
@@ -470,8 +434,7 @@ ts_indexing_mark_as(Oid index_id, IndexValidity validity)
 	was_valid = indexForm->indisvalid;
 
 	/* Perform the requested state change on the copy */
-	switch (validity)
-	{
+	switch (validity) {
 		case IndexValid:
 			Assert(indexForm->indislive);
 			Assert(indexForm->indisready);
@@ -490,15 +453,11 @@ ts_indexing_mark_as(Oid index_id, IndexValidity validity)
 	return was_valid;
 }
 
-void
-ts_indexing_mark_as_valid(Oid index_id)
-{
+void ts_indexing_mark_as_valid(Oid index_id) {
 	ts_indexing_mark_as(index_id, IndexValid);
 }
 
 /* returns if the index was valid */
-bool
-ts_indexing_mark_as_invalid(Oid index_id)
-{
+bool ts_indexing_mark_as_invalid(Oid index_id) {
 	return ts_indexing_mark_as(index_id, IndexInvalid);
 }

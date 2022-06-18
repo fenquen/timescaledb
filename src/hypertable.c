@@ -118,8 +118,7 @@ get_chunk_sizing_func_oid(const FormData_hypertable *fd) {
 						  false);
 }
 
-static HeapTuple
-hypertable_formdata_make_tuple(const FormData_hypertable *fd, TupleDesc desc) {
+static HeapTuple hypertable_formdata_make_tuple(const FormData_hypertable *fd, TupleDesc desc) {
 	Datum values[Natts_hypertable];
 	bool nulls[Natts_hypertable] = { false };
 
@@ -318,8 +317,7 @@ hypertable_is_compressed_or_materialization(const Hypertable *ht) {
 			status == HypertableIsMaterialization);
 }
 
-static ScanFilterResult
-hypertable_filter_exclude_compressed_and_materialization(const TupleInfo *ti, void *data) {
+static ScanFilterResult hypertable_filter_exclude_compressed_and_materialization(const TupleInfo *ti, void *data) {
 	Hypertable *ht = ts_hypertable_from_tupleinfo(ti);
 
 	return hypertable_is_compressed_or_materialization(ht) ? SCAN_EXCLUDE : SCAN_INCLUDE;
@@ -329,7 +327,7 @@ static int hypertable_scan_limit_internal(ScanKeyData *scanKeyData, // 数组首
 										  int scanKeyCount,			// 数组数量
 										  int indexid,
 										  tuple_found_func tupleFoundFunc,
-										  void *scandata,
+										  void *result,
 										  int limit,
 										  LOCKMODE lock,
 										  bool tuplock,
@@ -341,8 +339,8 @@ static int hypertable_scan_limit_internal(ScanKeyData *scanKeyData, // 数组首
 		.table = catalog_get_table_id(catalog, HYPERTABLE),
 		.index = catalog_get_index(catalog, HYPERTABLE, indexid),
 		.nkeys = scanKeyCount,
-		.scankey = scanKeyData, // 其中的datum便是要搜索的内容
-		.data = scandata,
+		.scankey = scanKeyData, // scanKeyData的sk_argument便是要搜索的内容
+		.data = result,
 		.limit = limit,
 		.tuple_found = tupleFoundFunc,
 		.lockmode = lock,
@@ -435,7 +433,7 @@ int ts_hypertable_update(Hypertable *ht) {
 int ts_hypertable_scan_with_memory_context(const char *schemaName,
 										   const char *tableName,
 										   tuple_found_func tupleFoundFunc,
-										   void *data,
+										   void *result,
 										   LOCKMODE lockmode,
 										   bool tuplock,
 										   MemoryContext memoryContext) {
@@ -457,18 +455,18 @@ int ts_hypertable_scan_with_memory_context(const char *schemaName,
 				Anum_hypertable_name_idx_table,
 				BTEqualStrategyNumber,
 				F_NAMEEQ,
-				NameGetDatum(&table_name));
+				NameGetDatum(&table_name)); // targetTable名字
 	ScanKeyInit(&scanKeyData[1],
 				Anum_hypertable_name_idx_schema,
 				BTEqualStrategyNumber,
 				F_NAMEEQ,
-				NameGetDatum(&schema_name));
+				NameGetDatum(&schema_name)); // targetTable的schema
 
 	return hypertable_scan_limit_internal(scanKeyData,
 										  2,
 										  HYPERTABLE_NAME_INDEX,
 										  tupleFoundFunc,
-										  data,
+										  result,
 										  1,
 										  lockmode,
 										  tuplock,
@@ -804,85 +802,101 @@ int ts_hypertable_set_num_dimensions(Hypertable *ht, int16 num_dimensions) {
 #define DEFAULT_ASSOCIATED_DISTRIBUTED_TABLE_PREFIX_FORMAT "_dist_hyper_%d"
 static const int MAXIMUM_PREFIX_LENGTH = NAMEDATALEN - 16;
 
-static void
-hypertable_insert_relation(Relation rel, FormData_hypertable *fd) {
+static void hypertable_insert_relation(Relation hypertable,		  // 记录各个hypertable元信息的表
+									   FormData_hypertable *fd) { // 条目
 	HeapTuple new_tuple;
 	CatalogSecurityContext sec_ctx;
 
-	new_tuple = hypertable_formdata_make_tuple(fd, RelationGetDescr(rel));
+	new_tuple = hypertable_formdata_make_tuple(fd, RelationGetDescr(hypertable));
 
 	ts_catalog_database_info_become_owner(ts_catalog_database_info_get(), &sec_ctx);
-	ts_catalog_insert(rel, new_tuple);
+	ts_catalog_insert(hypertable, new_tuple);
 	ts_catalog_restore_user(&sec_ctx);
 	heap_freetuple(new_tuple);
 }
 
-static void
-hypertable_insert(int32 hypertable_id, Name schema_name, Name table_name,
-				  Name associated_schema_name, Name associated_table_prefix,
-				  Name chunk_sizing_func_schema, Name chunk_sizing_func_name,
-				  int64 chunk_target_size, int16 num_dimensions, bool compressed,
-				  int16 replication_factor) {
+static void hypertable_insert(int32 hypertableId, // INVALID_HYPERTABLE_ID
+							  Name targetTableSchemaName,
+							  Name targetTableName,
+							  Name associatedSchemaName,  // INTERNAL_SCHEMA_NAME "_timescaledb_internal"
+							  Name associatedTablePrefix, // null
+							  Name chunkSizingFuncSchema,
+							  Name chunkSizingFuncName,
+							  int64 chunk_target_size,
+							  int16 dimensionCount, // 1
+							  bool compressed,		// false
+							  int16 replicationFactor) {
 	Catalog *catalog = ts_catalog_get();
-	Relation rel;
-	FormData_hypertable fd;
 
-	fd.id = hypertable_id;
-	if (fd.id == INVALID_HYPERTABLE_ID) {
+	FormData_hypertable formDataHypertable;
+
+	formDataHypertable.id = hypertableId;
+
+	if (formDataHypertable.id == INVALID_HYPERTABLE_ID) {
 		CatalogSecurityContext sec_ctx;
 		ts_catalog_database_info_become_owner(ts_catalog_database_info_get(), &sec_ctx);
-		fd.id = ts_catalog_table_next_seq_id(ts_catalog_get(), HYPERTABLE);
+		formDataHypertable.id = ts_catalog_table_next_seq_id(ts_catalog_get(), HYPERTABLE);
 		ts_catalog_restore_user(&sec_ctx);
 	}
 
-	namestrcpy(&fd.schema_name, NameStr(*schema_name));
-	namestrcpy(&fd.table_name, NameStr(*table_name));
-	namestrcpy(&fd.associated_schema_name, NameStr(*associated_schema_name));
+	namestrcpy(&formDataHypertable.schema_name, NameStr(*targetTableSchemaName));
+	namestrcpy(&formDataHypertable.table_name, NameStr(*targetTableName));
+	namestrcpy(&formDataHypertable.associated_schema_name, NameStr(*associatedSchemaName));
 
-	if (NULL == associated_table_prefix) {
+	if (NULL == associatedTablePrefix) {
 		NameData default_associated_table_prefix;
 		memset(NameStr(default_associated_table_prefix), '\0', NAMEDATALEN);
-		Assert(replication_factor >= 0);
-		if (replication_factor == 0)
+
+		Assert(replicationFactor >= 0);
+
+		// isDistCall是false的话 replicaFactor是0
+		if (replicationFactor == 0) {
 			snprintf(NameStr(default_associated_table_prefix),
 					 NAMEDATALEN,
 					 DEFAULT_ASSOCIATED_TABLE_PREFIX_FORMAT,
-					 fd.id);
-		else
+					 formDataHypertable.id);
+		} else {
 			snprintf(NameStr(default_associated_table_prefix),
 					 NAMEDATALEN,
 					 DEFAULT_ASSOCIATED_DISTRIBUTED_TABLE_PREFIX_FORMAT,
-					 fd.id);
-		namestrcpy(&fd.associated_table_prefix, NameStr(default_associated_table_prefix));
+					 formDataHypertable.id);
+		}
+
+		namestrcpy(&formDataHypertable.associated_table_prefix, NameStr(default_associated_table_prefix));
 	} else {
-		namestrcpy(&fd.associated_table_prefix, NameStr(*associated_table_prefix));
+		namestrcpy(&formDataHypertable.associated_table_prefix, NameStr(*associatedTablePrefix));
 	}
-	if (strnlen(NameStr(fd.associated_table_prefix), NAMEDATALEN) > MAXIMUM_PREFIX_LENGTH)
-		elog(ERROR, "associated_table_prefix too long");
 
-	fd.num_dimensions = num_dimensions;
+	if (strnlen(NameStr(formDataHypertable.associated_table_prefix), NAMEDATALEN) > MAXIMUM_PREFIX_LENGTH) {
+		elog(ERROR, "associatedTablePrefix too long");
+	}
 
-	namestrcpy(&fd.chunk_sizing_func_schema, NameStr(*chunk_sizing_func_schema));
-	namestrcpy(&fd.chunk_sizing_func_name, NameStr(*chunk_sizing_func_name));
+	formDataHypertable.num_dimensions = dimensionCount;
 
-	fd.chunk_target_size = chunk_target_size;
-	if (fd.chunk_target_size < 0)
-		fd.chunk_target_size = 0;
+	namestrcpy(&formDataHypertable.chunk_sizing_func_schema, NameStr(*chunkSizingFuncSchema));
+	namestrcpy(&formDataHypertable.chunk_sizing_func_name, NameStr(*chunkSizingFuncName));
 
-	if (compressed)
-		fd.compression_state = HypertableInternalCompressionTable;
-	else
-		fd.compression_state = HypertableCompressionOff;
+	formDataHypertable.chunk_target_size = chunk_target_size;
+	if (formDataHypertable.chunk_target_size < 0) {
+		formDataHypertable.chunk_target_size = 0;
+	}
+
+	if (compressed) {
+		formDataHypertable.compression_state = HypertableInternalCompressionTable;
+	} else {
+		formDataHypertable.compression_state = HypertableCompressionOff;
+	}
 
 	/* when creating a hypertable, there is never an associated compressed dual */
-	fd.compressed_hypertable_id = INVALID_HYPERTABLE_ID;
+	formDataHypertable.compressed_hypertable_id = INVALID_HYPERTABLE_ID;
 
 	/* finally, set replication factor */
-	fd.replication_factor = replication_factor;
+	formDataHypertable.replication_factor = replicationFactor;
 
-	rel = table_open(catalog_get_table_id(catalog, HYPERTABLE), RowExclusiveLock);
-	hypertable_insert_relation(rel, &fd);
-	table_close(rel, RowExclusiveLock);
+	// 表名对应 HYPERTABLE_TABLE_NAME,各个转换成的hypertable元信息是记录在  _timescaledb_catalog.hypertable
+	Relation hypertable = table_open(catalog_get_table_id(catalog, HYPERTABLE), RowExclusiveLock);
+	hypertable_insert_relation(hypertable, &formDataHypertable);
+	table_close(hypertable, RowExclusiveLock);
 }
 
 static ScanTupleResult
@@ -1136,8 +1150,7 @@ ts_hypertable_get_tablespace_at_offset_from(int32 hypertable_id, Oid tablespace_
 	return NULL;
 }
 
-static inline Oid
-hypertable_relid_lookup(Oid relid) {
+static inline Oid hypertable_relid_lookup(Oid relid) {
 	Cache *hcache;
 	Hypertable *ht = ts_hypertable_cache_get_cache_and_entry(relid, CACHE_FLAG_MISSING_OK, &hcache);
 	Oid result = (ht == NULL) ? InvalidOid : ht->main_table_relid;
@@ -1156,71 +1169,72 @@ Oid ts_hypertable_relid(RangeVar *rv) {
 }
 
 bool ts_is_hypertable(Oid relid) {
-	if (!OidIsValid(relid))
+	if (!OidIsValid(relid)) {
 		return false;
+	}
+
 	return hypertable_relid_lookup(relid) != InvalidOid;
 }
 
 /*
- * Check that the current user can create chunks in a hypertable's associated
- * schema.
+ * Check that the current user can create chunks in a hypertable's associated schema.
  *
  * This function is typically called from create_hypertable() to verify that the
  * table owner has CREATE permissions for the schema (if it already exists) or
  * the database (if the schema does not exist and needs to be created).
  */
-static Oid
-hypertable_check_associated_schema_permissions(const char *schema_name, Oid user_oid) {
-	Oid schema_oid;
-
+static Oid hypertable_check_associated_schema_permissions(const char *schemaName, Oid userOid) {
 	/*
 	 * If the schema name is NULL, it implies the internal catalog schema and
 	 * anyone should be able to create chunks there.
 	 */
-	if (NULL == schema_name)
+	if (NULL == schemaName) {
 		return InvalidOid;
-
-	schema_oid = get_namespace_oid(schema_name, true);
-
-	/* Anyone can create chunks in the internal schema */
-	if (strncmp(schema_name, INTERNAL_SCHEMA_NAME, NAMEDATALEN) == 0) {
-		Assert(OidIsValid(schema_oid));
-		return schema_oid;
 	}
 
-	if (!OidIsValid(schema_oid)) {
+	// 要missing的话应该是得到InvalidOid
+	Oid namespaceOid = get_namespace_oid(schemaName, true);
+
+	/* Anyone can create chunks in the internal schema */
+	if (strncmp(schemaName, INTERNAL_SCHEMA_NAME, NAMEDATALEN) == 0) {
+		Assert(OidIsValid(namespaceOid));
+		return namespaceOid;
+	} // 默认的话不会专门指定schema使用的是默认的到了这里也为止了
+
+	if (!OidIsValid(namespaceOid)) {
 		/*
 		 * Schema does not exist, so we must check that the user has
 		 * privileges to create the schema in the current database
 		 */
-		if (pg_database_aclcheck(MyDatabaseId, user_oid, ACL_CREATE) != ACLCHECK_OK)
+		if (pg_database_aclcheck(MyDatabaseId, userOid, ACL_CREATE) != ACLCHECK_OK)
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 					 errmsg("permissions denied: cannot create schema \"%s\" in database \"%s\"",
-							schema_name,
+							schemaName,
 							get_database_name(MyDatabaseId))));
-	} else if (pg_namespace_aclcheck(schema_oid, user_oid, ACL_CREATE) != ACLCHECK_OK)
+	} else if (pg_namespace_aclcheck(namespaceOid, userOid, ACL_CREATE) != ACLCHECK_OK)
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 errmsg("permissions denied: cannot create chunks in schema \"%s\"", schema_name)));
+				 errmsg("permissions denied: cannot create chunks in schema \"%s\"", schemaName)));
 
-	return schema_oid;
+	return namespaceOid;
 }
 
-static bool
-relation_has_tuples(Relation rel) {
-	TableScanDesc scandesc = table_beginscan(rel, GetActiveSnapshot(), 0, NULL);
-	TupleTableSlot *slot =
-		MakeSingleTupleTableSlot(RelationGetDescr(rel), table_slot_callbacks(rel));
-	bool hastuples = table_scan_getnextslot(scandesc, ForwardScanDirection, slot);
+static bool relation_has_tuples(Relation relation) {
+	TableScanDesc tableScanDesc = table_beginscan(relation, GetActiveSnapshot(), 0, NULL);
 
-	heap_endscan(scandesc);
-	ExecDropSingleTupleTableSlot(slot);
-	return hastuples;
+	TupleTableSlot *tupleTableSlot =
+		MakeSingleTupleTableSlot(RelationGetDescr(relation), table_slot_callbacks(relation));
+
+	bool hasTuples = table_scan_getnextslot(tableScanDesc, ForwardScanDirection, tupleTableSlot);
+
+	heap_endscan(tableScanDesc);
+	ExecDropSingleTupleTableSlot(tupleTableSlot);
+
+	return hasTuples;
 }
 
-static bool
-table_has_tuples(Oid table_relid, LOCKMODE lockmode) {
+static bool table_has_tuples(Oid table_relid, LOCKMODE lockmode) {
 	Relation rel = table_open(table_relid, lockmode);
 	bool hastuples = relation_has_tuples(rel);
 
@@ -1228,17 +1242,17 @@ table_has_tuples(Oid table_relid, LOCKMODE lockmode) {
 	return hastuples;
 }
 
-static bool
-table_is_logged(Oid table_relid) {
-	return get_rel_persistence(table_relid) == RELPERSISTENCE_PERMANENT;
+static bool table_is_logged(Oid tableRelid) {
+	return get_rel_persistence(tableRelid) == RELPERSISTENCE_PERMANENT;
 }
 
-static bool
-table_has_replica_identity(const Relation rel) {
+static bool table_has_replica_identity(const Relation rel) {
 	return rel->rd_rel->relreplident != REPLICA_IDENTITY_DEFAULT;
 }
 
-static bool inline table_has_rules(Relation rel) { return rel->rd_rules != NULL; }
+static bool inline table_has_rules(Relation rel) {
+	return rel->rd_rules != NULL;
+}
 
 bool ts_hypertable_has_chunks(Oid table_relid, LOCKMODE lockmode) {
 	return find_inheritance_children(table_relid, lockmode) != NIL;
@@ -1263,27 +1277,28 @@ hypertable_create_schema(const char *schema_name) {
  * constraints cannot be enforced on a hypertable since they only exist on the
  * parent table, which will have no tuples.
  */
-static void
-hypertable_validate_constraints(Oid relid, int replication_factor) {
-	Relation catalog;
-	SysScanDesc scan;
-	ScanKeyData scankey;
-	HeapTuple tuple;
+static void hypertable_validate_constraints(Oid relid, int replicationFactor) {
+	Relation constrainTable = table_open(ConstraintRelationId, AccessShareLock);
 
-	catalog = table_open(ConstraintRelationId, AccessShareLock);
-
-	ScanKeyInit(&scankey,
+	ScanKeyData scanKeyData;
+	ScanKeyInit(&scanKeyData,
 				Anum_pg_constraint_conrelid,
 				BTEqualStrategyNumber,
 				F_OIDEQ,
-				ObjectIdGetDatum(relid));
+				ObjectIdGetDatum(relid)); // 要找的目标
 
-	scan = systable_beginscan(catalog, ConstraintRelidTypidNameIndexId, true, NULL, 1, &scankey);
+	SysScanDesc scan = systable_beginscan(constrainTable,
+										  ConstraintRelidTypidNameIndexId,
+										  true,
+										  NULL,
+										  1,
+										  &scanKeyData);
 
-	while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
-		Form_pg_constraint form = (Form_pg_constraint) GETSTRUCT(tuple);
+	HeapTuple heapTuple;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scan))) {
+		Form_pg_constraint form = (Form_pg_constraint) GETSTRUCT(heapTuple);
 
-		if (form->contype == CONSTRAINT_CHECK && form->connoinherit)
+		if (form->contype == CONSTRAINT_CHECK && form->connoinherit) {
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 					 errmsg("cannot have NO INHERIT constraints on hypertable \"%s\"",
@@ -1291,18 +1306,17 @@ hypertable_validate_constraints(Oid relid, int replication_factor) {
 					 errhint("Remove all NO INHERIT constraints from table \"%s\" before "
 							 "making it a hypertable.",
 							 get_rel_name(relid))));
+		}
 
-		if (form->contype == CONSTRAINT_FOREIGN && replication_factor > 0)
+		if (form->contype == CONSTRAINT_FOREIGN && replicationFactor > 0) {
 			ereport(WARNING,
-					(errmsg("distributed hypertable \"%s\" has a foreign key to"
-							" a non-distributed table",
-							get_rel_name(relid)),
-					 errdetail("Non-distributed tables that are referenced by a distributed"
-							   " hypertable must exist and be identical on all data nodes.")));
+					(errmsg("distributed hypertable \"%s\" has a foreign key to a non-distributed table", get_rel_name(relid)),
+					 errdetail("Non-distributed tables that are referenced by a distributed hypertable must exist and be identical on all data nodes.")));
+		}
 	}
 
 	systable_endscan(scan);
-	table_close(catalog, AccessShareLock);
+	table_close(constrainTable, AccessShareLock);
 }
 
 /*
@@ -1497,8 +1511,9 @@ Datum ts_hypertable_insert_blocker_trigger_add(PG_FUNCTION_ARGS) {
 	PG_RETURN_OID(insert_blocker_trigger_add(relid));
 }
 
-static Datum
-create_hypertable_datum(FunctionCallInfo fcinfo, const Hypertable *ht, bool created) {
+static Datum create_hypertable_datum(FunctionCallInfo fcinfo,
+									 const Hypertable *ht,
+									 bool created) {
 	TupleDesc tupdesc;
 	Datum values[Natts_create_hypertable];
 	bool nulls[Natts_create_hypertable] = { false };
@@ -1511,12 +1526,12 @@ create_hypertable_datum(FunctionCallInfo fcinfo, const Hypertable *ht, bool crea
 						"context that cannot accept type record")));
 
 	tupdesc = BlessTupleDesc(tupdesc);
+
 	values[AttrNumberGetAttrOffset(Anum_create_hypertable_id)] = Int32GetDatum(ht->fd.id);
-	values[AttrNumberGetAttrOffset(Anum_create_hypertable_schema_name)] =
-		NameGetDatum(&ht->fd.schema_name);
-	values[AttrNumberGetAttrOffset(Anum_create_hypertable_table_name)] =
-		NameGetDatum(&ht->fd.table_name);
+	values[AttrNumberGetAttrOffset(Anum_create_hypertable_schema_name)] =NameGetDatum(&ht->fd.schema_name);
+	values[AttrNumberGetAttrOffset(Anum_create_hypertable_table_name)] =NameGetDatum(&ht->fd.table_name);
 	values[AttrNumberGetAttrOffset(Anum_create_hypertable_created)] = BoolGetDatum(created);
+
 	tuple = heap_form_tuple(tupdesc, values, nulls);
 
 	return HeapTupleGetDatum(tuple);
@@ -1677,7 +1692,9 @@ static Datum ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool isDistCall) {
 
 	TS_PREVENT_FUNC_IF_READ_ONLY();
 
-	Hypertable *hypertable = ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_MISSING_OK, &cache);
+	Hypertable *hypertable = ts_hypertable_cache_get_cache_and_entry(tableOid,
+																	 CACHE_FLAG_MISSING_OK,
+																	 &cache);
 
 	if (hypertable) {
 		if (ifNotExists) {
@@ -1752,8 +1769,9 @@ static Datum ts_hypertable_create_internal(PG_FUNCTION_ARGS, bool isDistCall) {
 		Assert(created);
 
 		hypertable = ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_NONE, &cache);
-		if (NULL != spaceDimensionInfo)
+		if (NULL != spaceDimensionInfo) {
 			ts_hypertable_check_partitioning(hypertable, spaceDimensionInfo->dimension_id);
+		}
 	}
 
 	Datum result = create_hypertable_datum(fcinfo, hypertable, created);
@@ -1776,31 +1794,27 @@ Datum ts_hypertable_distributed_create(PG_FUNCTION_ARGS) {
  * All parameters after tim_dim_info can be NUL
  * returns 'true' if new hypertable was created, false if 'if_not_exists' and the hypertable already exists.
  */
-bool ts_hypertable_create_from_info(Oid tableOid,
-									int32 hypertable_id,
+bool ts_hypertable_create_from_info(Oid targetTableOid,
+									int32 hypertableId,
 									uint32 flags,
-									DimensionInfo *time_dim_info,
-									DimensionInfo *space_dim_info,
-									Name associated_schema_name,
-									Name associated_table_prefix,
-									ChunkSizingInfo *chunk_sizing_info,
-									int16 replication_factor,
+									DimensionInfo *timeDimensionInfo,
+									DimensionInfo *spaceDimInfo,
+									Name associatedSchemaName,
+									Name associatedTablePrefix,
+									ChunkSizingInfo *chunkSizingInfo,
+									int16 replicationFactor,
 									List *data_node_names) {
-	Hypertable *ht;
-	Oid associated_schema_oid;
-	Oid user_oid = GetUserId();
-	Oid tspc_oid = get_rel_tablespace(tableOid);
+	Oid userOid = GetUserId();
+	Oid tablespaceOid = get_rel_tablespace(targetTableOid);
 
-	NameData schema_name, table_name, default_associated_schema_name;
-	Relation originalTable;
-	bool if_not_exists = (flags & HYPERTABLE_CREATE_IF_NOT_EXISTS) != 0;
+	bool ifNotExists = (flags & HYPERTABLE_CREATE_IF_NOT_EXISTS) != 0;
 
 	/* quick exit in the easy if-not-exists case to avoid all locking */
-	if (if_not_exists && ts_is_hypertable(tableOid)) {
+	if (ifNotExists && ts_is_hypertable(targetTableOid)) {
 		ereport(NOTICE,
 				(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
 				 errmsg("table \"%s\" is already a hypertable, skipping",
-						get_rel_name(tableOid))));
+						get_rel_name(targetTableOid))));
 
 		return false;
 	}
@@ -1815,41 +1829,32 @@ bool ts_hypertable_create_from_info(Oid tableOid,
 	 * migrating data, then shouldn't have much contention on the table thus
 	 * not worth optimizing.
 	 */
-	originalTable = table_open(tableOid, AccessExclusiveLock);
+	Relation targetTable = table_open(targetTableOid, AccessExclusiveLock);
 
 	/* recheck after getting lock */
-	if (ts_is_hypertable(tableOid)) {
-		/*
-		 * Unlock and return. Note that unlocking is analogous to what PG does
-		 * for ALTER TABLE ADD COLUMN IF NOT EXIST
-		 */
-		table_close(originalTable, AccessExclusiveLock);
+	if (ts_is_hypertable(targetTableOid)) {
+		// Unlock and return. Note that unlocking is analogous to what PG does for ALTER TABLE ADD COLUMN IF NOT EXIST
+		table_close(targetTable, AccessExclusiveLock);
 
-		if (if_not_exists) {
+		if (ifNotExists) {
 			ereport(NOTICE,
-					(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
-					 errmsg("table \"%s\" is already a hypertable, skipping",
-							get_rel_name(tableOid))));
+					(errcode(ERRCODE_TS_HYPERTABLE_EXISTS), errmsg("table \"%s\" is already a hypertable, skipping", get_rel_name(targetTableOid))));
 			return false;
 		}
 
 		ereport(ERROR,
-				(errcode(ERRCODE_TS_HYPERTABLE_EXISTS),
-				 errmsg("table \"%s\" is already a hypertable", get_rel_name(tableOid))));
+				(errcode(ERRCODE_TS_HYPERTABLE_EXISTS), errmsg("table \"%s\" is already a hypertable", get_rel_name(targetTableOid))));
 	}
 
-	/*
-	 * Check that the user has permissions to make this table into a
-	 * hypertable
-	 */
-	ts_hypertable_permissions_check(tableOid, user_oid);
+	// 用户对targetTable有没有权限
+	ts_hypertable_permissions_check(targetTableOid, userOid);
 
 	/* Is this the right kind of relation? */
-	switch (get_rel_relkind(tableOid)) {
+	switch (get_rel_relkind(targetTableOid)) {
 		case RELKIND_PARTITIONED_TABLE:
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("table \"%s\" is already partitioned", get_rel_name(tableOid)),
+					 errmsg("table \"%s\" is already partitioned", get_rel_name(targetTableOid)),
 					 errdetail("It is not possible to turn partitioned tables into hypertables.")));
 		case RELKIND_MATVIEW:
 		case RELKIND_RELATION:
@@ -1859,167 +1864,176 @@ bool ts_hypertable_create_from_info(Oid tableOid,
 	}
 
 	/* Check that the table doesn't have any unsupported constraints */
-	hypertable_validate_constraints(tableOid, replication_factor);
+	hypertable_validate_constraints(targetTableOid, replicationFactor);
 
-	bool table_has_data = relation_has_tuples(originalTable);
+	bool targetTableHasData = relation_has_tuples(targetTable);
 
-	if ((flags & HYPERTABLE_CREATE_MIGRATE_DATA) == 0 && table_has_data)
+	if ((flags & HYPERTABLE_CREATE_MIGRATE_DATA) == 0 && targetTableHasData) {
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("table \"%s\" is not empty", get_rel_name(tableOid)),
+				 errmsg("table \"%s\" is not empty", get_rel_name(targetTableOid)),
 				 errhint("You can migrate data by specifying 'migrate_data => true' when calling "
 						 "this function.")));
+	}
 
-	if (is_inheritance_table(tableOid))
+	if (is_inheritance_table(targetTableOid)) {
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("table \"%s\" is already partitioned", get_rel_name(tableOid)),
+				 errmsg("table \"%s\" is already partitioned", get_rel_name(targetTableOid)),
 				 errdetail(
 					 "It is not possible to turn tables that use inheritance into hypertables.")));
+	}
 
-	if (!table_is_logged(tableOid))
+	if (!table_is_logged(targetTableOid)) {
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("table \"%s\" has to be logged", get_rel_name(tableOid)),
+				 errmsg("table \"%s\" has to be logged", get_rel_name(targetTableOid)),
 				 errdetail(
 					 "It is not possible to turn temporary or unlogged tables into hypertables.")));
+	}
 
-	if (table_has_replica_identity(originalTable))
+	// pg的replica identity 与 逻辑复制 相关,与之相对的是物理复制
+	// hypertable不支持逻辑复制
+	if (table_has_replica_identity(targetTable)) {
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("table \"%s\" has replica identity set", get_rel_name(tableOid)),
-				 errdetail("Logical replication is not supported on hypertables.")));
+				 errmsg("table \"%s\" has replica identity set", get_rel_name(targetTableOid)),
+				 errdetail("logical replication is not supported on hypertable.")));
+	}
 
-	if (table_has_rules(originalTable))
+	// 表有没有 rewrite rules
+	// 牵涉到了rule概念
+	// https://blog.csdn.net/weixin_43628593/article/details/105124464
+	// https://blog.csdn.net/oraclesand/article/details/57083432
+	if (table_has_rules(targetTable))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("hypertables do not support rules"),
-				 errdetail("Table \"%s\" has attached rules, which do not work on hypertables.",
-						   get_rel_name(tableOid)),
+				 errdetail("Table \"%s\" has attached rules, which do not work on hypertables.", get_rel_name(targetTableOid)),
 				 errhint("Remove the rules before creating a hypertable.")));
 
-	/*
-	 * Create the associated schema where chunks are stored, or, check
-	 * permissions if it already exists
-	 */
-	if (NULL == associated_schema_name) {
+	// create the associated schema where chunks are stored, or, check permissions if it already exists
+	NameData default_associated_schema_name;
+	if (NULL == associatedSchemaName) {
 		namestrcpy(&default_associated_schema_name, INTERNAL_SCHEMA_NAME);
-		associated_schema_name = &default_associated_schema_name;
+		associatedSchemaName = &default_associated_schema_name;
 	}
 
-	associated_schema_oid =
-		hypertable_check_associated_schema_permissions(NameStr(*associated_schema_name), user_oid);
+	Oid associatedSchemaOid =
+		hypertable_check_associated_schema_permissions(NameStr(*associatedSchemaName), userOid);
 
-	/* Create the associated schema if it doesn't already exist */
-	if (!OidIsValid(associated_schema_oid))
-		hypertable_create_schema(NameStr(*associated_schema_name));
+	// create the associated schema if it doesn't exist
+	if (!OidIsValid(associatedSchemaOid)) {
+		hypertable_create_schema(NameStr(*associatedSchemaName));
+	}
 
-	/*
-	 * Hypertables do not support transition tables in triggers, so if the
-	 * table already has such triggers we bail out
-	 */
-	if (ts_relation_has_transition_table_trigger(tableOid))
+	// hypertable not support transition tables in triggers, so if the table already has such triggers we bail out
+	// 确保原始表上的trigger没有涉及 transition table https://dba.stackexchange.com/questions/177463/what-is-a-transition-table-in-postgres
+	if (ts_relation_has_transition_table_trigger(targetTableOid)) {
 		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("hypertables do not support transition tables in triggers")));
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("hypertables do not support transition tables in triggers")));
+	}
 
-	if (NULL == chunk_sizing_info)
-		chunk_sizing_info = ts_chunk_sizing_info_get_default_disabled(tableOid);
+	if (NULL == chunkSizingInfo) {
+		chunkSizingInfo = ts_chunk_sizing_info_get_default_disabled(targetTableOid);
+	}
 
 	/* Validate and set chunk sizing information */
-	if (OidIsValid(chunk_sizing_info->func)) {
-		ts_chunk_adaptive_sizing_info_validate(chunk_sizing_info);
+	if (OidIsValid(chunkSizingInfo->func)) {
+		ts_chunk_adaptive_sizing_info_validate(chunkSizingInfo);
 
-		if (chunk_sizing_info->target_size_bytes > 0) {
+		if (chunkSizingInfo->target_size_bytes > 0) {
 			ereport(NOTICE,
 					(errcode(ERRCODE_WARNING),
-					 errmsg("adaptive chunking is a BETA feature and is not recommended for "
-							"production deployments")));
-			time_dim_info->adaptive_chunking = true;
+					 errmsg("adaptive chunking is a BETA feature and is not recommended for production deployments")));
+			timeDimensionInfo->adaptive_chunking = true;
 		}
 	} else {
 		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("chunk sizing function cannot be NULL")));
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("chunk sizing function cannot be NULL")));
 	}
 
 	/* Validate that the dimensions are OK */
-	ts_dimension_info_validate(time_dim_info);
+	ts_dimension_info_validate(timeDimensionInfo);
 
-	if (DIMENSION_INFO_IS_SET(space_dim_info)) {
-		ts_dimension_info_validate(space_dim_info);
+	if (DIMENSION_INFO_IS_SET(spaceDimInfo)) {
+		ts_dimension_info_validate(spaceDimInfo);
 	}
 
 	/* Checks pass, now we can create the catalog information */
-	namestrcpy(&schema_name, get_namespace_name(get_rel_namespace(tableOid)));
-	namestrcpy(&table_name, get_rel_name(tableOid));
+	NameData targetTableSchemaName;
+	NameData targetTableName;
+	namestrcpy(&targetTableSchemaName, get_namespace_name(get_rel_namespace(targetTableOid)));
+	namestrcpy(&targetTableName, get_rel_name(targetTableOid));
 
 	// inert into 到 _timescaledb_catalog.hypertable
-	hypertable_insert(hypertable_id,
-					  &schema_name,
-					  &table_name,
-					  associated_schema_name,
-					  associated_table_prefix,
-					  &chunk_sizing_info->func_schema,
-					  &chunk_sizing_info->func_name,
-					  chunk_sizing_info->target_size_bytes,
-					  DIMENSION_INFO_IS_SET(space_dim_info) ? 2 : 1,
+	hypertable_insert(hypertableId,
+					  &targetTableSchemaName,
+					  &targetTableName,
+					  associatedSchemaName,
+					  associatedTablePrefix,
+					  &chunkSizingInfo->func_schema,
+					  &chunkSizingInfo->func_name,
+					  chunkSizingInfo->target_size_bytes,
+					  DIMENSION_INFO_IS_SET(spaceDimInfo) ? 2 : 1,
 					  false,
-					  replication_factor);
+					  replicationFactor);
 
 	Cache *hcache;
 
 	/* Get the a Hypertable object via the cache */
-	time_dim_info->ht =
-		ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_NONE, &hcache);
+	timeDimensionInfo->ht = ts_hypertable_cache_get_cache_and_entry(targetTableOid,
+																	CACHE_FLAG_NONE,
+																	&hcache);
 
-	/* Add validated dimensions */
-	ts_dimension_add_from_info(time_dim_info);
+	// 向 _timescaledb_catalog.dimension 增记录
+	ts_dimension_add_from_info(timeDimensionInfo);
 
-	if (DIMENSION_INFO_IS_SET(space_dim_info)) {
-		space_dim_info->ht = time_dim_info->ht;
-		ts_dimension_add_from_info(space_dim_info);
+	if (DIMENSION_INFO_IS_SET(spaceDimInfo)) {
+		spaceDimInfo->ht = timeDimensionInfo->ht;
+		ts_dimension_add_from_info(spaceDimInfo);
 	}
 
 	/* Refresh the cache to get the updated hypertable with added dimensions */
 	ts_cache_release(hcache);
 
-	ht = ts_hypertable_cache_get_cache_and_entry(tableOid, CACHE_FLAG_NONE, &hcache);
+	Hypertable *hypertable = ts_hypertable_cache_get_cache_and_entry(targetTableOid, CACHE_FLAG_NONE, &hcache);
 
 	/* Verify that existing indexes are compatible with a hypertable */
-	ts_indexing_verify_indexes(ht);
+	ts_indexing_verify_indexes(hypertable);
 
 	/* Attach tablespace, if any */
-	if (OidIsValid(tspc_oid) && !hypertable_is_distributed(ht)) {
-		NameData tspc_name;
+	if (OidIsValid(tablespaceOid) && !hypertable_is_distributed(hypertable)) {
+		NameData tablespaceName;
 
-		namestrcpy(&tspc_name, get_tablespace_name(tspc_oid));
-		ts_tablespace_attach_internal(&tspc_name, tableOid, false);
+		namestrcpy(&tablespaceName, get_tablespace_name(tablespaceOid));
+
+		// 向 _timescaledb_catalog.tablespace 记录这样的1条记录 （id,hypertable表上对应的id,tablespaceName）
+		ts_tablespace_attach_internal(&tablespaceName, targetTableOid, false);
 	}
 
 	/*
 	 * Migrate data from the main table to chunks
 	 *
-	 * Note: we do not unlock here. We wait till the end of the txn instead.
-	 * Must close the relation before migrating data.
+	 * Note: we do not unlock here. We wait till the end of the txn instead. Must close the relation before migrating data.
 	 */
-	table_close(originalTable, NoLock);
+	table_close(targetTable, NoLock);
 
-	if (table_has_data) {
+	if (targetTableHasData) {
 		ereport(NOTICE,
 				(errmsg("migrating data to chunks"),
 				 errdetail("Migration might take a while depending on the amount of data.")));
 
-		timescaledb_move_from_table_to_chunks(ht, RowExclusiveLock);
+		timescaledb_move_from_table_to_chunks(hypertable, RowExclusiveLock);
 	}
 
-	insert_blocker_trigger_add(tableOid);
+	insert_blocker_trigger_add(targetTableOid);
 
 	if ((flags & HYPERTABLE_CREATE_DISABLE_DEFAULT_INDEXES) == 0)
-		ts_indexing_create_default_indexes(ht);
+		ts_indexing_create_default_indexes(hypertable);
 
-	if (replication_factor > 0) {
-		ts_cm_functions->hypertable_make_distributed(ht, data_node_names);
+	if (replicationFactor > 0) {
+		ts_cm_functions->hypertable_make_distributed(hypertable, data_node_names);
 	} else if (list_length(data_node_names) > 0) {
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),

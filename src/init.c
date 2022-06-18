@@ -65,13 +65,8 @@ extern void TSDLLEXPORT _PG_init(void);
 TS_FUNCTION_INFO_V1(ts_post_load_init);
 
 /* Called when the backend exits */
-static void
-cleanup_on_pg_proc_exit(int code, Datum arg)
-{
-	/*
-	 * Order of items should be strict reverse order of _PG_init. Please
-	 * document any exceptions.
-	 */
+static void cleanup_on_pg_proc_exit(int code, Datum arg) {
+	// order of items should be strict reverse order of _PG_init. Please document any exceptions.
 #ifdef TS_DEBUG
 	_conn_mock_fini();
 #endif
@@ -89,10 +84,7 @@ cleanup_on_pg_proc_exit(int code, Datum arg)
 }
 
 void _PG_init(void) {
-	/*
-	 * Check extension_is loaded to catch certain errors such as calls to
-	 * functions defined on the wrong extension version
-	 */
+	// check extension_is loaded to catch certain errors such as calls to functions defined on the wrong extension version
 	ts_extension_check_version(TIMESCALEDB_VERSION_MOD);
 	ts_extension_check_server_version();
 	ts_bgw_check_loader_api_version();
@@ -119,9 +111,7 @@ void _PG_init(void) {
 	on_proc_exit(cleanup_on_pg_proc_exit, 0);
 }
 
-TSDLLEXPORT Datum
-ts_post_load_init(PG_FUNCTION_ARGS)
-{
+TSDLLEXPORT Datum ts_post_load_init(PG_FUNCTION_ARGS) {
 	/*
 	 * Unfortunately, if we load the tsl during _PG_init parallel workers try
 	 * to load the tsl before timescale itself, causing link-time errors. To

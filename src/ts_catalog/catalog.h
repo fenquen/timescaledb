@@ -115,12 +115,13 @@ enum Anum_hypertable {
 
 #define Natts_hypertable (_Anum_hypertable_max - 1)
 
+// hypertable表的单条记录的表达
 typedef struct FormData_hypertable {
-	int32 id;
-	NameData schema_name;
-	NameData table_name;
-	NameData associated_schema_name;
-	NameData associated_table_prefix;
+	int32 id; // 来自sequence
+	NameData schema_name; // 目标的表对应的schema
+	NameData table_name;// 目标的表的名字
+	NameData associated_schema_name; //  INTERNAL_SCHEMA_NAME "_timescaledb_internal"
+	NameData associated_table_prefix; // DEFAULT_ASSOCIATED_TABLE_PREFIX_FORMAT "_hyper_%d"
 	int16 num_dimensions;
 	NameData chunk_sizing_func_schema;
 	NameData chunk_sizing_func_name;
@@ -1212,8 +1213,7 @@ extern void ts_catalog_reset(void);
 extern bool ts_is_catalog_table(Oid relid);
 
 /* Functions should operate on a passed-in Catalog struct */
-static inline Oid
-catalog_get_table_id(Catalog *catalog, CatalogTable tableid) {
+static inline Oid catalog_get_table_id(Catalog *catalog, CatalogTable tableid) {
 	return catalog->tables[tableid].id;
 }
 
@@ -1226,7 +1226,7 @@ extern TSDLLEXPORT int64 ts_catalog_table_next_seq_id(const Catalog *catalog, Ca
 extern Oid ts_catalog_get_cache_proxy_id(Catalog *catalog, CacheType type);
 
 /* Functions that modify the actual catalog table on disk */
-extern TSDLLEXPORT bool ts_catalog_database_info_become_owner(CatalogDatabaseInfo *database_info,
+extern TSDLLEXPORT bool ts_catalog_database_info_become_owner(CatalogDatabaseInfo *catalogDatabaseInfo,
 															  CatalogSecurityContext *sec_ctx);
 extern TSDLLEXPORT void ts_catalog_restore_user(CatalogSecurityContext *sec_ctx);
 

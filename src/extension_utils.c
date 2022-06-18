@@ -33,8 +33,7 @@
 
 #define RENDEZVOUS_LOADER_PRESENT_NAME "timescaledb.loader_present"
 
-enum ExtensionState
-{
+enum ExtensionState {
 	/*
 	 * NOT_INSTALLED means that this backend knows that the extension is not
 	 * present. In this state we know that the proxy table is not present.
@@ -68,8 +67,7 @@ enum ExtensionState
 };
 
 static char *
-extension_version(void)
-{
+extension_version(void) {
 	Datum result;
 	Relation rel;
 	SysScanDesc scandesc;
@@ -91,12 +89,10 @@ extension_version(void)
 	tuple = systable_getnext(scandesc);
 
 	/* We assume that there can be at most one matching tuple */
-	if (HeapTupleIsValid(tuple))
-	{
+	if (HeapTupleIsValid(tuple)) {
 		result = heap_getattr(tuple, Anum_pg_extension_extversion, RelationGetDescr(rel), &is_null);
 
-		if (!is_null)
-		{
+		if (!is_null) {
 			sql_version = pstrdup(TextDatumGetCString(result));
 		}
 	}
@@ -104,16 +100,14 @@ extension_version(void)
 	systable_endscan(scandesc);
 	table_close(rel, AccessShareLock);
 
-	if (sql_version == NULL)
-	{
+	if (sql_version == NULL) {
 		elog(ERROR, "extension not found while getting version");
 	}
 	return sql_version;
 }
 
 static Oid
-get_proxy_table_relid()
-{
+get_proxy_table_relid() {
 	Oid nsid = get_namespace_oid(CACHE_SCHEMA_NAME, true);
 
 	if (!OidIsValid(nsid))
@@ -122,28 +116,23 @@ get_proxy_table_relid()
 	return get_relname_relid(EXTENSION_PROXY_TABLE, nsid);
 }
 
-static bool inline extension_exists()
-{
+static bool inline extension_exists() {
 	return OidIsValid(get_extension_oid(EXTENSION_NAME, true));
 }
 
-static bool inline extension_is_transitioning()
-{
+static bool inline extension_is_transitioning() {
 	/*
 	 * Determine whether the extension is being created or upgraded (as a
 	 * misnomer creating_extension is true during upgrades)
 	 */
-	if (creating_extension)
-	{
+	if (creating_extension) {
 		return get_extension_oid(EXTENSION_NAME, true) == CurrentExtensionObject;
 	}
 	return false;
 }
 
 /* Returns the recomputed current state */
-static enum ExtensionState
-extension_current_state()
-{
+static enum ExtensionState extension_current_state() {
 	Oid proxy_relid;
 
 	/*
@@ -169,8 +158,7 @@ extension_current_state()
 
 	proxy_relid = get_proxy_table_relid();
 
-	if (OidIsValid(proxy_relid))
-	{
+	if (OidIsValid(proxy_relid)) {
 		Assert(extension_exists());
 		return EXTENSION_STATE_CREATED;
 	}
@@ -179,22 +167,19 @@ extension_current_state()
 }
 
 static void
-extension_load_without_preload()
-{
+extension_load_without_preload() {
 	/* cannot use GUC variable here since extension not yet loaded */
 	char *allow_install_without_preload =
 		GetConfigOptionByName("timescaledb.allow_install_without_preload", NULL, true);
 
-	if (allow_install_without_preload == NULL || strcmp(allow_install_without_preload, "on") != 0)
-	{
+	if (allow_install_without_preload == NULL || strcmp(allow_install_without_preload, "on") != 0) {
 		/*
 		 * These are FATAL because otherwise the loader ends up in a weird
 		 * half-loaded state after an ERROR
 		 */
 		/* Only privileged users can get the value of `config file` */
 
-		if (has_privs_of_role(GetUserId(), ROLE_PG_READ_ALL_SETTINGS))
-		{
+		if (has_privs_of_role(GetUserId(), ROLE_PG_READ_ALL_SETTINGS)) {
 			char *config_file = GetConfigOptionByName("config_file", NULL, false);
 
 			ereport(FATAL,
@@ -214,9 +199,7 @@ extension_load_without_preload()
 							 "library without preloading, you can disable this check with: \n"
 							 "	SET timescaledb.allow_install_without_preload = 'on';",
 							 config_file)));
-		}
-		else
-		{
+		} else {
 			ereport(FATAL,
 					(errmsg("extension \"%s\" must be preloaded", EXTENSION_NAME),
 					 errhint(

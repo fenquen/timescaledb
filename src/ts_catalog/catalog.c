@@ -552,12 +552,12 @@ Oid ts_catalog_get_cache_proxy_id(Catalog *catalog, CacheType type) {
  * with ts_catalog_restore_user().
  */
 TSDLLEXPORT bool
-ts_catalog_database_info_become_owner(CatalogDatabaseInfo *database_info,
+ts_catalog_database_info_become_owner(CatalogDatabaseInfo *catalogDatabaseInfo,
 									  CatalogSecurityContext *sec_ctx) {
 	GetUserIdAndSecContext(&sec_ctx->saved_uid, &sec_ctx->saved_security_context);
 
-	if (sec_ctx->saved_uid != database_info->owner_uid) {
-		SetUserIdAndSecContext(database_info->owner_uid,
+	if (sec_ctx->saved_uid != catalogDatabaseInfo->owner_uid) {
+		SetUserIdAndSecContext(catalogDatabaseInfo->owner_uid,
 							   sec_ctx->saved_security_context | SECURITY_LOCAL_USERID_CHANGE);
 		return true;
 	}

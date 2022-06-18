@@ -66,11 +66,8 @@ static enum ExtensionState extstate = EXTENSION_STATE_UNKNOWN;
  */
 static Oid ts_extension_oid = InvalidOid;
 
-Oid
-ts_extension_get_oid(void)
-{
-	if (OidIsValid(ts_extension_oid))
-	{
+Oid ts_extension_get_oid(void) {
+	if (OidIsValid(ts_extension_oid)) {
 		Assert(ts_extension_oid == get_extension_oid(EXTENSION_NAME, true));
 		return ts_extension_oid;
 	}
@@ -80,24 +77,20 @@ ts_extension_get_oid(void)
 }
 
 static bool
-extension_loader_present()
-{
+extension_loader_present() {
 	void **presentptr = find_rendezvous_variable(RENDEZVOUS_LOADER_PRESENT_NAME);
 
 	return (*presentptr != NULL && *((bool *) *presentptr));
 }
 
-void
-ts_extension_check_version(const char *so_version)
-{
+void ts_extension_check_version(const char *so_version) {
 	char *sql_version;
 
 	if (!IsNormalProcessingMode() || !IsTransactionState() || !extension_exists())
 		return;
 	sql_version = extension_version();
 
-	if (strcmp(sql_version, so_version) != 0)
-	{
+	if (strcmp(sql_version, so_version) != 0) {
 		/*
 		 * Throw a FATAL error here so that clients will be forced to reconnect
 		 * when they have the wrong extension version loaded.
@@ -111,15 +104,12 @@ ts_extension_check_version(const char *so_version)
 						sql_version)));
 	}
 
-	if (!process_shared_preload_libraries_in_progress && !extension_loader_present())
-	{
+	if (!process_shared_preload_libraries_in_progress && !extension_loader_present()) {
 		extension_load_without_preload();
 	}
 }
 
-void
-ts_extension_check_server_version()
-{
+void ts_extension_check_server_version() {
 	/*
 	 * This is a load-time check for the correct server version since the
 	 * extension may be distributed as a binary
@@ -127,8 +117,7 @@ ts_extension_check_server_version()
 	char *server_version_num_guc = GetConfigOptionByName("server_version_num", NULL, false);
 	long server_version_num = strtol(server_version_num_guc, NULL, 10);
 
-	if (!is_supported_pg_version(server_version_num))
-	{
+	if (!is_supported_pg_version(server_version_num)) {
 		char *server_version_guc = GetConfigOptionByName("server_version", NULL, false);
 
 		ereport(ERROR,
@@ -141,14 +130,11 @@ ts_extension_check_server_version()
 
 /* Sets a new state, returning whether the state has changed */
 static bool
-extension_set_state(enum ExtensionState newstate)
-{
-	if (newstate == extstate)
-	{
+extension_set_state(enum ExtensionState newstate) {
+	if (newstate == extstate) {
 		return false;
 	}
-	switch (newstate)
-	{
+	switch (newstate) {
 		case EXTENSION_STATE_TRANSITIONING:
 		case EXTENSION_STATE_UNKNOWN:
 			break;
@@ -167,9 +153,7 @@ extension_set_state(enum ExtensionState newstate)
 }
 
 /* Updates the state based on the current state, returning whether there had been a change. */
-static void
-extension_update_state()
-{
+static void extension_update_state() {
 	enum ExtensionState new_state = extension_current_state();
 
 	/* Never actually set the state to "not installed" since there is no good
@@ -194,20 +178,15 @@ extension_update_state()
 	 * 'TRANSITIONING', because otherwise we might not be even able to do a
 	 * catalog lookup because we are not in transaction state, and the like.
 	 */
-	if (new_state == EXTENSION_STATE_CREATED || new_state == EXTENSION_STATE_TRANSITIONING)
-	{
-		ts_extension_oid = get_extension_oid(EXTENSION_NAME, true /* missing_ok */);
+	if (new_state == EXTENSION_STATE_CREATED || new_state == EXTENSION_STATE_TRANSITIONING) {
+		ts_extension_oid = get_extension_oid(EXTENSION_NAME, true );
 		Assert(ts_extension_oid != InvalidOid);
-	}
-	else
-	{
+	} else {
 		ts_extension_oid = InvalidOid;
 	}
 }
 
-Oid
-ts_extension_schema_oid(void)
-{
+Oid ts_extension_schema_oid(void) {
 	Datum result;
 	Relation rel;
 	SysScanDesc scandesc;
@@ -229,8 +208,7 @@ ts_extension_schema_oid(void)
 	tuple = systable_getnext(scandesc);
 
 	/* We assume that there can be at most one matching tuple */
-	if (HeapTupleIsValid(tuple))
-	{
+	if (HeapTupleIsValid(tuple)) {
 		result =
 			heap_getattr(tuple, Anum_pg_extension_extnamespace, RelationGetDescr(rel), &is_null);
 
@@ -247,14 +225,12 @@ ts_extension_schema_oid(void)
 }
 
 char *
-ts_extension_schema_name(void)
-{
+ts_extension_schema_name(void) {
 	return get_namespace_name(ts_extension_schema_oid());
 }
 
 const char *
-ts_experimental_schema_name(void)
-{
+ts_experimental_schema_name(void) {
 	return TS_EXPERIMENTAL_SCHEMA_NAME;
 }
 
@@ -269,9 +245,7 @@ ts_experimental_schema_name(void)
  * Instead, the function just invalidates the state so that the true state is
  * resolved lazily when needed.
  */
-void
-ts_extension_invalidate(void)
-{
+void ts_extension_invalidate(void) {
 	extstate = EXTENSION_STATE_UNKNOWN;
 	extension_proxy_oid = InvalidOid;
 }
@@ -288,8 +262,7 @@ bool ts_extension_is_loaded(void) {
 	if (ts_guc_restoring || IsBinaryUpgrade)
 		return false;
 
-	if (EXTENSION_STATE_UNKNOWN == extstate || EXTENSION_STATE_TRANSITIONING == extstate)
-	{
+	if (EXTENSION_STATE_UNKNOWN == extstate || EXTENSION_STATE_TRANSITIONING == extstate) {
 		/* status may have updated without a relcache invalidate event */
 		extension_update_state();
 	}
@@ -331,8 +304,7 @@ bool ts_extension_is_loaded(void) {
 }
 
 const char *
-ts_extension_get_so_name(void)
-{
+ts_extension_get_so_name(void) {
 	return EXTENSION_NAME "-" TIMESCALEDB_VERSION_MOD;
 }
 
@@ -340,14 +312,11 @@ ts_extension_get_so_name(void)
  * Get the currently installed extension version.
  */
 const char *
-ts_extension_get_version(void)
-{
+ts_extension_get_version(void) {
 	return extension_version();
 }
 
-bool
-ts_extension_is_proxy_table_relid(Oid relid)
-{
+bool ts_extension_is_proxy_table_relid(Oid relid) {
 	return relid == extension_proxy_oid;
 }
 
@@ -361,9 +330,7 @@ static const char *extstate_str[] = {
 
 TS_FUNCTION_INFO_V1(ts_extension_get_state);
 
-Datum
-ts_extension_get_state(PG_FUNCTION_ARGS)
-{
+Datum ts_extension_get_state(PG_FUNCTION_ARGS) {
 	PG_RETURN_TEXT_P(cstring_to_text(extstate_str[extstate]));
 }
 #endif

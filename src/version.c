@@ -41,9 +41,7 @@ TS_FUNCTION_INFO_V1(ts_get_git_commit);
  * that are defined. If no fields are defined, we throw an error notifying the
  * user that there is no git information available at all. */
 #if defined(EXT_GIT_COMMIT_HASH) || defined(EXT_GIT_COMMIT_TAG) || defined(EXT_GIT_COMMIT_TIME)
-Datum
-ts_get_git_commit(PG_FUNCTION_ARGS)
-{
+Datum ts_get_git_commit(PG_FUNCTION_ARGS) {
 	TupleDesc tupdesc;
 	HeapTuple tuple;
 	Datum values[3] = { 0 };
@@ -84,9 +82,7 @@ ts_get_git_commit(PG_FUNCTION_ARGS)
 	return HeapTupleGetDatum(tuple);
 }
 #else
-Datum
-ts_get_git_commit(PG_FUNCTION_ARGS)
-{
+Datum ts_get_git_commit(PG_FUNCTION_ARGS) {
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			 errmsg("extension not built with any Git commit information")));
@@ -97,9 +93,7 @@ ts_get_git_commit(PG_FUNCTION_ARGS)
 
 #include <Windows.h>
 
-bool
-ts_version_get_os_info(VersionOSInfo *info)
-{
+bool ts_version_get_os_info(VersionOSInfo *info) {
 	DWORD bufsize;
 	void *buffer;
 	VS_FIXEDFILEINFO *vinfo = NULL;
@@ -143,8 +137,7 @@ error:
 #define NAME_FIELD "PRETTY_NAME=\""
 
 static bool
-get_pretty_version(char *pretty_version)
-{
+get_pretty_version(char *pretty_version) {
 	FILE *version_file;
 	char *contents = palloc(MAX_READ_LEN);
 	size_t bytes_read;
@@ -177,8 +170,7 @@ get_pretty_version(char *pretty_version)
 
 	contents += sizeof(NAME_FIELD) - 1;
 
-	for (i = 0; i < (VERSION_INFO_LEN - 1); i++)
-	{
+	for (i = 0; i < (VERSION_INFO_LEN - 1); i++) {
 		char c = contents[i];
 
 		if (c == '\0' || c == '\n' || c == '\r' || c == '"')
@@ -194,9 +186,7 @@ cleanup:
 	return got_pretty_version;
 }
 
-bool
-ts_version_get_os_info(VersionOSInfo *info)
-{
+bool ts_version_get_os_info(VersionOSInfo *info) {
 	/* Get the OS name  */
 	struct utsname os_info;
 
@@ -211,9 +201,7 @@ ts_version_get_os_info(VersionOSInfo *info)
 	return true;
 }
 #else
-bool
-ts_version_get_os_info(VersionOSInfo *info)
-{
+bool ts_version_get_os_info(VersionOSInfo *info) {
 	memset(info, 0, sizeof(VersionOSInfo));
 	return false;
 }
@@ -221,9 +209,7 @@ ts_version_get_os_info(VersionOSInfo *info)
 
 TS_FUNCTION_INFO_V1(ts_get_os_info);
 
-Datum
-ts_get_os_info(PG_FUNCTION_ARGS)
-{
+Datum ts_get_os_info(PG_FUNCTION_ARGS) {
 	TupleDesc tupdesc;
 	Datum values[4];
 	bool nulls[4] = { false };
@@ -236,8 +222,7 @@ ts_get_os_info(PG_FUNCTION_ARGS)
 				 errmsg("function returning record called in context "
 						"that cannot accept type record")));
 
-	if (ts_version_get_os_info(&info))
-	{
+	if (ts_version_get_os_info(&info)) {
 		values[0] = CStringGetTextDatum(info.sysname);
 		values[1] = CStringGetTextDatum(info.version);
 		values[2] = CStringGetTextDatum(info.release);
@@ -245,8 +230,7 @@ ts_get_os_info(PG_FUNCTION_ARGS)
 			values[3] = CStringGetTextDatum(info.pretty_version);
 		else
 			nulls[3] = true;
-	}
-	else
+	} else
 		memset(nulls, true, sizeof(nulls));
 
 	tuple = heap_form_tuple(tupdesc, values, nulls);

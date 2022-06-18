@@ -28,7 +28,7 @@ extern Tablespace *ts_tablespaces_add(Tablespaces *tablespaces, const FormData_t
 									  Oid tspc_oid);
 extern bool ts_tablespaces_contain(const Tablespaces *tspcs, Oid tspc_oid);
 extern Tablespaces *ts_tablespace_scan(int32 hypertable_id);
-extern TSDLLEXPORT void ts_tablespace_attach_internal(Name tspcname, Oid hypertable_oid,
+extern TSDLLEXPORT void ts_tablespace_attach_internal(Name tableSpaceName, Oid targetTableOid,
 													  bool if_not_attached);
 extern int ts_tablespace_delete(int32 hypertable_id, const char *tspcname, Oid tspcoid);
 extern int ts_tablespace_count_attached(const char *tspcname);

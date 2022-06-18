@@ -51,10 +51,8 @@ typedef struct Hypertable {
 	Oid chunk_sizing_func;
 	Hyperspace *space;
 	SubspaceStore *chunk_cache;
-	/*
-	 * Allows restricting the data nodes to use for the hypertable. Default is to
-	 * use all available data nodes.
-	 */
+
+	// Allows restricting the data nodes to use for the hypertable. Default is to use all available data nodes.
 	List *data_nodes;
 } Hypertable;
 
@@ -90,9 +88,9 @@ typedef enum HypertableType {
 } HypertableType;
 
 extern TSDLLEXPORT bool ts_hypertable_create_from_info(
-	Oid tableOid, int32 hypertable_id, uint32 flags, DimensionInfo *time_dim_info,
-	DimensionInfo *space_dim_info, Name associated_schema_name, Name associated_table_prefix,
-	ChunkSizingInfo *chunk_sizing_info, int16 replication_factor, List *data_node_names);
+	Oid targetTableOid, int32 hypertableId, uint32 flags, DimensionInfo *timeDimensionInfo,
+	DimensionInfo *spaceDimInfo, Name associatedSchemaName, Name associatedTablePrefix,
+	ChunkSizingInfo *chunkSizingInfo, int16 replicationFactor, List *data_node_names);
 extern TSDLLEXPORT bool ts_hypertable_create_compressed(Oid table_relid, int32 hypertable_id);
 
 extern TSDLLEXPORT Hypertable *ts_hypertable_get_by_id(int32 hypertable_id);
@@ -105,7 +103,7 @@ extern TSDLLEXPORT Oid ts_hypertable_permissions_check(Oid hypertable_oid, Oid u
 extern TSDLLEXPORT void ts_hypertable_permissions_check_by_id(int32 hypertable_id);
 extern Hypertable *ts_hypertable_from_tupleinfo(const TupleInfo *ti);
 extern int ts_hypertable_scan_with_memory_context(const char *schemaName, const char *tableName,
-												  tuple_found_func tupleFoundFunc, void *data,
+												  tuple_found_func tupleFoundFunc, void *result,
 												  LOCKMODE lockmode, bool tuplock,
 												  MemoryContext memoryContext);
 extern TM_Result ts_hypertable_lock_tuple(Oid table_relid);

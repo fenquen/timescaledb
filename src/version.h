@@ -10,8 +10,7 @@
 
 #define VERSION_INFO_LEN 128
 
-typedef struct VersionOSInfo
-{
+typedef struct VersionOSInfo {
 	char sysname[VERSION_INFO_LEN];
 	char version[VERSION_INFO_LEN];
 	char release[VERSION_INFO_LEN];

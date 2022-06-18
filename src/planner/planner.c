@@ -68,8 +68,7 @@
 #endif
 
 /* define parameters necessary to generate the baserel info hash table interface */
-typedef struct BaserelInfoEntry
-{
+typedef struct BaserelInfoEntry {
 	Oid reloid;
 	/* Either a chunk or plain baserel (TS_REL_OTHER). */
 	TsRelType type;
@@ -148,18 +147,14 @@ DataFetcherType ts_data_node_fetcher_scan_type = AutoFetcherType;
  */
 static struct BaserelInfo_hash *ts_baserel_info = NULL;
 
-static void
-rte_mark_for_expansion(RangeTblEntry *rte)
-{
-	Assert(rte->rtekind == RTE_RELATION);
-	Assert(rte->ctename == NULL);
-	rte->ctename = (char *) TS_CTE_EXPAND;
-	rte->inh = false;
+static void rte_mark_for_expansion(RangeTblEntry *rangeTblEntry) {
+	Assert(rangeTblEntry->rtekind == RTE_RELATION);
+	Assert(rangeTblEntry->ctename == NULL);
+	rangeTblEntry->ctename = (char *) TS_CTE_EXPAND;
+	rangeTblEntry->inh = false;
 }
 
-bool
-ts_rte_is_marked_for_expansion(const RangeTblEntry *rte)
-{
+bool ts_rte_is_marked_for_expansion(const RangeTblEntry *rte) {
 	if (NULL == rte->ctename)
 		return false;
 
@@ -182,8 +177,7 @@ ts_rte_is_marked_for_expansion(const RangeTblEntry *rte)
 static List *planner_hcaches = NIL;
 
 static Cache *
-planner_hcache_push(void)
-{
+planner_hcache_push(void) {
 	Cache *hcache = ts_hypertable_cache_pin();
 
 	planner_hcaches = lcons(hcache, planner_hcaches);
@@ -192,8 +186,7 @@ planner_hcache_push(void)
 }
 
 static void
-planner_hcache_pop(bool release)
-{
+planner_hcache_pop(bool release) {
 	Cache *hcache;
 
 	Assert(list_length(planner_hcaches) > 0);
@@ -207,14 +200,11 @@ planner_hcache_pop(bool release)
 }
 
 static bool
-planner_hcache_exists(void)
-{
+planner_hcache_exists(void) {
 	return planner_hcaches != NIL;
 }
 
-static Cache *
-planner_hcache_get(void)
-{
+static Cache *planner_hcache_get(void) {
 	if (planner_hcaches == NIL)
 		return NULL;
 
@@ -230,9 +220,7 @@ planner_hcache_get(void)
  * allows fast lookups during planning to also determine if something is _not_ a
  * hypertable.
  */
-Hypertable *
-ts_planner_get_hypertable(const Oid relid, const unsigned int flags)
-{
+Hypertable *ts_planner_get_hypertable(const Oid relid, const unsigned int flags) {
 	Cache *cache = planner_hcache_get();
 
 	if (NULL == cache)
@@ -241,9 +229,7 @@ ts_planner_get_hypertable(const Oid relid, const unsigned int flags)
 	return ts_hypertable_cache_get_entry(cache, relid, flags);
 }
 
-bool
-ts_rte_is_hypertable(const RangeTblEntry *rte, bool *isdistributed)
-{
+bool ts_rte_is_hypertable(const RangeTblEntry *rte, bool *isdistributed) {
 	Hypertable *ht = ts_planner_get_hypertable(rte->relid, CACHE_FLAG_CHECK);
 
 	if (isdistributed && ht != NULL)
@@ -252,7 +238,7 @@ ts_rte_is_hypertable(const RangeTblEntry *rte, bool *isdistributed)
 	return ht != NULL;
 }
 
-#define IS_UPDL_CMD(parse)                                                                         \
+#define IS_UPDL_CMD(parse) \
 	((parse)->commandType == CMD_UPDATE || (parse)->commandType == CMD_DELETE)
 
 typedef struct
@@ -272,7 +258,7 @@ typedef struct
 } PreprocessQueryContext;
 
 /*
- * Preprocess the query tree, including, e.g., subqueries.
+ * Preprocess the query tree, including, e.g., sub queries.
  *
  * Preprocessing includes:
  *
@@ -287,107 +273,104 @@ typedef struct
  *
  * 4. Constifying now() expressions for primary time dimension.
  */
-static bool preprocess_query(Node *node, PreprocessQueryContext *context) {
-	if (node == NULL)
+static bool preprocessQuery(Node *node, PreprocessQueryContext *context) {
+	if (node == NULL) {
 		return false;
+	}
 
-	if (IsA(node, FromExpr) && ts_guc_enable_optimizations && ts_guc_enable_now_constify)
-	{
+	if (IsA(node, FromExpr) && ts_guc_enable_optimizations && ts_guc_enable_now_constify) {
 		FromExpr *from = castNode(FromExpr, node);
-		if (from->quals)
-		{
-			from->quals =
-				ts_constify_now(context->root, context->current_query->rtable, from->quals);
+		if (from->quals) {
+			from->quals = ts_constify_now(context->root, context->current_query->rtable, from->quals);
 		}
 	} else if (IsA(node, Query)) {
 		Query *query = castNode(Query, node);
 		Query *prev_query;
 		Cache *hcache = planner_hcache_get();
-		ListCell *lc;
+		ListCell *listCell;
 		Index rti = 1;
-		bool ret;
 
-		foreach (lc, query->rtable)
-		{
-			RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
-			Hypertable *ht;
+		foreach (listCell, query->rtable) {
+			RangeTblEntry *rangeTblEntry = lfirst_node(RangeTblEntry, listCell);
 
-			switch (rte->rtekind)
-			{
+			switch (rangeTblEntry->rtekind) {
 				case RTE_SUBQUERY:
-					if (ts_guc_enable_optimizations && ts_guc_enable_cagg_reorder_groupby &&
-						query->commandType == CMD_SELECT)
-					{
+					if (ts_guc_enable_optimizations &&
+						ts_guc_enable_cagg_reorder_groupby &&
+						query->commandType == CMD_SELECT) {
 						/* applicable to selects on continuous aggregates */
 						List *outer_tlist = query->targetList;
 						List *outer_sortcl = query->sortClause;
-						cagg_reorder_groupby_clause(rte, rti, outer_sortcl, outer_tlist);
+						cagg_reorder_groupby_clause(rangeTblEntry, rti, outer_sortcl, outer_tlist);
 					}
 					break;
-				case RTE_RELATION:
-					/* This lookup will warm the cache with all hypertables in the query */
-					ht = ts_hypertable_cache_get_entry(hcache, rte->relid, CACHE_FLAG_MISSING_OK);
+				case RTE_RELATION: {
+					// this lookup will warm the cache with all hypertables in the query
+					Hypertable *hyperTable = ts_hypertable_cache_get_entry(hcache,
+																		   rangeTblEntry->relid,
+																		   CACHE_FLAG_MISSING_OK);
 
-					if (ht)
-					{
+					if (hyperTable) {
 						/* Mark hypertable RTEs we'd like to expand ourselves */
-						if (ts_guc_enable_optimizations && ts_guc_enable_constraint_exclusion &&
-							!IS_UPDL_CMD(context->rootquery) && query->resultRelation == 0 &&
-							query->rowMarks == NIL && rte->inh)
-							rte_mark_for_expansion(rte);
-
-						if (TS_HYPERTABLE_HAS_COMPRESSION_TABLE(ht))
-						{
-							int compr_htid = ht->fd.compressed_hypertable_id;
-
-							/* Also warm the cache with the compressed
-							 * companion hypertable */
-							ht = ts_hypertable_cache_get_entry_by_id(hcache, compr_htid);
-							Assert(ht != NULL);
+						if (ts_guc_enable_optimizations &&
+							ts_guc_enable_constraint_exclusion &&
+							!IS_UPDL_CMD(context->rootquery) &&
+							query->resultRelation == 0 &&
+							query->rowMarks == NIL &&
+							rangeTblEntry->inh) {
+							rte_mark_for_expansion(rangeTblEntry);
 						}
 
-						if (hypertable_is_distributed(ht))
-						{
+						if (TS_HYPERTABLE_HAS_COMPRESSION_TABLE(hyperTable)) {
+							int compr_htid = hyperTable->fd.compressed_hypertable_id;
+
+							/* Also warm the cache with the compressed companion hypertable */
+							hyperTable = ts_hypertable_cache_get_entry_by_id(hcache, compr_htid);
+							Assert(hyperTable != NULL);
+						}
+
+						if (hypertable_is_distributed(hyperTable)) {
 							context->num_distributed_tables++;
 						}
-					}
-					else
-					{
+					} else {
 						/* To properly keep track of SELECT FROM ONLY <chunk> we
-						 * have to mark the rte here because postgres will set
-						 * rte->inh to false (when it detects the chunk has no
+						 * have to mark the rangeTblEntry here because postgres will set
+						 * rangeTblEntry->inh to false (when it detects the chunk has no
 						 * children which is true for all our chunks) before it
 						 * reaches set_rel_pathlist hook. But chunks from queries
-						 * like SELECT ..  FROM ONLY <chunk> has rte->inh set to
-						 * false and other chunks have rte->inh set to true.
+						 * like SELECT ..  FROM ONLY <chunk> has rangeTblEntry->inh set to
+						 * false and other chunks have rangeTblEntry->inh set to true.
 						 * We want to distinguish between the two cases here by
-						 * marking the chunk when rte->inh is true.
+						 * marking the chunk when rangeTblEntry->inh is true.
 						 */
-						Chunk *chunk = ts_chunk_get_by_relid(rte->relid, false);
-						if (chunk && rte->inh)
-							rte_mark_for_expansion(rte);
+						Chunk *chunk = ts_chunk_get_by_relid(rangeTblEntry->relid, false);
+						if (chunk && rangeTblEntry->inh)
+							rte_mark_for_expansion(rangeTblEntry);
 					}
-					break;
+				} break;
 				default:
 					break;
 			}
+
 			rti++;
 		}
+
 		prev_query = context->current_query;
 		context->current_query = query;
-		ret = query_tree_walker(query, preprocess_query, context, 0);
+
+		bool ret = query_tree_walker(query, preprocessQuery, context, 0);
 		context->current_query = prev_query;
 		return ret;
 	}
 
-	return expression_tree_walker(node, preprocess_query, context);
+	return expression_tree_walker(node, preprocessQuery, context);
 }
 
 static PlannedStmt *
 #if PG13_GE
-timescaledb_planner(Query *parse, const char *query_string, int cursor_opts,ParamListInfo bound_params)
+timescaledb_planner(Query *parse, const char *query_string, int cursor_opts, ParamListInfo bound_params)
 #else
-timescaledb_planner(Query *parse,
+timescaledb_planner(Query *query,
 					int cursor_opts,
 					ParamListInfo bound_params)
 #endif
@@ -412,23 +395,23 @@ timescaledb_planner(Query *parse,
 
 	PG_TRY();
 	{
-		PreprocessQueryContext context = { 0 };
+		PreprocessQueryContext preprocessQueryContext = { 0 };
 
-		PlannerGlobal glob = {
+		PlannerGlobal plannerGlobal = {
 			.boundParams = bound_params,
 		};
 
 		PlannerInfo root = {
-			.glob = &glob,
+			.glob = &plannerGlobal,
 		};
 
-		context.root = &root;
-		context.rootquery = parse;
-		context.current_query = parse;
+		preprocessQueryContext.root = &root;
+		preprocessQueryContext.rootquery = query;
+		preprocessQueryContext.current_query = query;
 
 		if (ts_extension_is_loaded()) {
 			// Preprocess the hyper tables in the query and warm up the caches.
-			preprocess_query((Node *) parse, &context);
+			preprocessQuery((Node *) query, &preprocessQueryContext);
 
 			/*
 			 * Determine which type of fetcher to use. If set by GUC, use what
@@ -456,7 +439,7 @@ timescaledb_planner(Query *parse,
 				reset_fetcher_type = true;
 
 				if (ts_guc_remote_data_fetcher == AutoFetcherType) {
-					if (context.num_distributed_tables >= 2) {
+					if (preprocessQueryContext.num_distributed_tables >= 2) {
 						ts_data_node_fetcher_scan_type = CursorFetcherType;
 					} else {
 						ts_data_node_fetcher_scan_type = RowByRowFetcherType;
@@ -477,7 +460,7 @@ timescaledb_planner(Query *parse,
 
 				/*
 				 * This is a per-query cache, so we create it in the current
-				 * memory context for the top-level call of this function, which
+				 * memory preprocessQueryContext for the top-level call of this function, which
 				 * hopefully should exist for the duration of the query. Message
 				 * or portal memory contexts could also be suitable, but they
 				 * don't exist for SPI calls.
@@ -488,18 +471,17 @@ timescaledb_planner(Query *parse,
 			}
 		}
 
-		if (prev_planner_hook != NULL) {// call any earlier hooks
+		if (prev_planner_hook != NULL) { // call any earlier hooks
 #if PG13_GE
-			stmt = (prev_planner_hook) (parse, query_string, cursor_opts, bound_params);
+			stmt = (prev_planner_hook) (query, query_string, cursor_opts, bound_params);
 #else
-			stmt = (prev_planner_hook) (parse, cursor_opts, bound_params);
+			stmt = (prev_planner_hook) (query, cursor_opts, bound_params);
 #endif
-		}
-		else { // call the standard planner
+		} else { // call the standard planner
 #if PG13_GE
-			stmt = standard_planner(parse, query_string, cursor_opts, bound_params);
+			stmt = standard_planner(query, query_string, cursor_opts, bound_params);
 #else
-			stmt = standard_planner(parse, cursor_opts, bound_params);
+			stmt = standard_planner(query, cursor_opts, bound_params);
 #endif
 		}
 
@@ -548,19 +530,16 @@ timescaledb_planner(Query *parse,
 }
 
 static RangeTblEntry *
-get_parent_rte(const PlannerInfo *root, Index rti)
-{
+get_parent_rte(const PlannerInfo *root, Index rti) {
 	ListCell *lc;
 
 	/* Fast path when arrays are setup */
-	if (root->append_rel_array != NULL && root->append_rel_array[rti] != NULL)
-	{
+	if (root->append_rel_array != NULL && root->append_rel_array[rti] != NULL) {
 		AppendRelInfo *appinfo = root->append_rel_array[rti];
 		return planner_rt_fetch(appinfo->parent_relid, root);
 	}
 
-	foreach (lc, root->append_rel_list)
-	{
+	foreach (lc, root->append_rel_list) {
 		AppendRelInfo *appinfo = lfirst_node(AppendRelInfo, lc);
 
 		if (appinfo->child_relid == rti)
@@ -578,15 +557,13 @@ get_parent_rte(const PlannerInfo *root, Index rti)
  * confined to the lifetime of the query and not used across queries.
  */
 static BaserelInfoEntry *
-get_or_add_baserel_from_cache(Oid chunk_relid, TsRelType chunk_reltype)
-{
+get_or_add_baserel_from_cache(Oid chunk_relid, TsRelType chunk_reltype) {
 	Hypertable *ht = NULL;
 	TsRelType reltype = TS_REL_OTHER;
 	/* First, check if this reloid is in cache. */
 	bool found = false;
 	BaserelInfoEntry *entry = BaserelInfo_insert(ts_baserel_info, chunk_relid, &found);
-	if (found)
-	{
+	if (found) {
 		return entry;
 	}
 
@@ -596,8 +573,7 @@ get_or_add_baserel_from_cache(Oid chunk_relid, TsRelType chunk_reltype)
 	 */
 	int32 hypertable_id = 0;
 	int32 chunk_status = 0;
-	if (ts_chunk_get_hypertable_id_and_status_by_relid(chunk_relid, &hypertable_id, &chunk_status))
-	{
+	if (ts_chunk_get_hypertable_id_and_status_by_relid(chunk_relid, &hypertable_id, &chunk_status)) {
 		/*
 		 * This is a chunk. Look up the hypertable for it.
 		 */
@@ -606,9 +582,7 @@ get_or_add_baserel_from_cache(Oid chunk_relid, TsRelType chunk_reltype)
 		Oid hypertable_relid = ts_hypertable_id_to_relid(hypertable_id);
 		ht = ts_planner_get_hypertable(hypertable_relid, CACHE_FLAG_NONE);
 		Assert(ht != NULL);
-	}
-	else
-	{
+	} else {
 		Assert(reltype == TS_REL_OTHER);
 	}
 
@@ -626,15 +600,13 @@ get_or_add_baserel_from_cache(Oid chunk_relid, TsRelType chunk_reltype)
  * the first planner hook.
  */
 static TsRelType
-classify_relation(const PlannerInfo *root, const RelOptInfo *rel, Hypertable **p_ht)
-{
+classify_relation(const PlannerInfo *root, const RelOptInfo *rel, Hypertable **p_ht) {
 	RangeTblEntry *rte;
 	RangeTblEntry *parent_rte;
 	TsRelType reltype = TS_REL_OTHER;
 	Hypertable *ht = NULL;
 
-	switch (rel->reloptkind)
-	{
+	switch (rel->reloptkind) {
 		case RELOPT_BASEREL:
 			rte = planner_rt_fetch(rel->relid, root);
 			/*
@@ -648,8 +620,7 @@ classify_relation(const PlannerInfo *root, const RelOptInfo *rel, Hypertable **p
 
 			if (ht != NULL)
 				reltype = TS_REL_HYPERTABLE;
-			else
-			{
+			else {
 				/*
 				 * This case is hit also by non-chunk BASERELs. We need a costly
 				 * chunk metadata scan to distinguish between chunk and non-chunk
@@ -672,31 +643,25 @@ classify_relation(const PlannerInfo *root, const RelOptInfo *rel, Hypertable **p
 			 * as happens with UNION ALL for example. So we have to
 			 * check for that to properly detect that pattern.
 			 */
-			if (parent_rte->rtekind == RTE_SUBQUERY)
-			{
+			if (parent_rte->rtekind == RTE_SUBQUERY) {
 				ht = ts_planner_get_hypertable(rte->relid,
 											   rte->inh ? CACHE_FLAG_MISSING_OK : CACHE_FLAG_CHECK);
 
 				if (ht != NULL)
 					reltype = TS_REL_HYPERTABLE;
-			}
-			else
-			{
+			} else {
 				if (!OidIsValid(rte->relid))
 					break;
 				ht = ts_planner_get_hypertable(parent_rte->relid, CACHE_FLAG_CHECK);
 
-				if (ht != NULL)
-				{
+				if (ht != NULL) {
 					if (parent_rte->relid == rte->relid)
 						reltype = TS_REL_HYPERTABLE_CHILD;
-					else
-					{
+					else {
 						/* add cache entry for chunk child */
 						BaserelInfoEntry *entry =
 							get_or_add_baserel_from_cache(rte->relid, TS_REL_CHUNK_CHILD);
-						if (entry->type != TS_REL_CHUNK_CHILD)
-						{
+						if (entry->type != TS_REL_CHUNK_CHILD) {
 							ereport(ERROR,
 									(errcode(ERRCODE_INTERNAL_ERROR),
 									 errmsg("unexpected chunk type %d for chunk %s",
@@ -723,8 +688,7 @@ extern void ts_sort_transform_optimization(PlannerInfo *root, RelOptInfo *rel);
 
 static inline bool
 should_chunk_append(Hypertable *ht, PlannerInfo *root, RelOptInfo *rel, Path *path, bool ordered,
-					int order_attno)
-{
+					int order_attno) {
 	if (
 #if PG14_LT
 		root->parse->commandType != CMD_SELECT ||
@@ -738,8 +702,7 @@ should_chunk_append(Hypertable *ht, PlannerInfo *root, RelOptInfo *rel, Path *pa
 		!ts_guc_enable_chunk_append || hypertable_is_distributed(ht))
 		return false;
 
-	switch (nodeTag(path))
-	{
+	switch (nodeTag(path)) {
 		case T_AppendPath:
 			/*
 			 * If there are clauses that have mutable functions, or clauses that reference
@@ -753,8 +716,7 @@ should_chunk_append(Hypertable *ht, PlannerInfo *root, RelOptInfo *rel, Path *pa
 				if (list_length(append->subpaths) == 0)
 					return false;
 
-				foreach (lc, rel->baserestrictinfo)
-				{
+				foreach (lc, rel->baserestrictinfo) {
 					RestrictInfo *rinfo = (RestrictInfo *) lfirst(lc);
 
 					if (contain_mutable_functions((Node *) rinfo->clause) ||
@@ -789,14 +751,12 @@ should_chunk_append(Hypertable *ht, PlannerInfo *root, RelOptInfo *rel, Path *pa
 
 				if (IsA(em_expr, Var) && castNode(Var, em_expr)->varattno == order_attno)
 					return true;
-				else if (IsA(em_expr, FuncExpr) && list_length(path->pathkeys) == 1)
-				{
+				else if (IsA(em_expr, FuncExpr) && list_length(path->pathkeys) == 1) {
 					FuncExpr *func = castNode(FuncExpr, em_expr);
 					FuncInfo *info = ts_func_cache_get_bucketing_func(func->funcid);
 					Expr *transformed;
 
-					if (info != NULL)
-					{
+					if (info != NULL) {
 						transformed = info->sort_transform(func);
 						if (IsA(transformed, Var) &&
 							castNode(Var, transformed)->varattno == order_attno)
@@ -813,8 +773,7 @@ should_chunk_append(Hypertable *ht, PlannerInfo *root, RelOptInfo *rel, Path *pa
 }
 
 static inline bool
-should_constraint_aware_append(PlannerInfo *root, Hypertable *ht, Path *path)
-{
+should_constraint_aware_append(PlannerInfo *root, Hypertable *ht, Path *path) {
 	/* Constraint-aware append currently expects children that scans a real
 	 * "relation" (e.g., not an "upper" relation). So, we do not run it on a
 	 * distributed hypertable because the append children are typically
@@ -828,27 +787,23 @@ should_constraint_aware_append(PlannerInfo *root, Hypertable *ht, Path *path)
 }
 
 static bool
-rte_should_expand(const RangeTblEntry *rte)
-{
+rte_should_expand(const RangeTblEntry *rte) {
 	bool is_hypertable = ts_rte_is_hypertable(rte, NULL);
 
 	return is_hypertable && !rte->inh && ts_rte_is_marked_for_expansion(rte);
 }
 
 static void
-reenable_inheritance(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte)
-{
+reenable_inheritance(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte) {
 	Index i;
 	bool set_pathlist_for_current_rel = false;
 	double total_pages;
 	bool reenabled_inheritance = false;
 
-	for (i = 1; i < root->simple_rel_array_size; i++)
-	{
+	for (i = 1; i < root->simple_rel_array_size; i++) {
 		RangeTblEntry *in_rte = root->simple_rte_array[i];
 
-		if (rte_should_expand(in_rte))
-		{
+		if (rte_should_expand(in_rte)) {
 			RelOptInfo *in_rel = root->simple_rel_array[i];
 			Hypertable *ht = ts_planner_get_hypertable(in_rte->relid, CACHE_FLAG_NOCREATE);
 
@@ -867,8 +822,7 @@ reenable_inheritance(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntr
 			 * as happens with UNION ALL for example.
 			 */
 			if (in_rel->reloptkind == RELOPT_BASEREL ||
-				in_rel->reloptkind == RELOPT_OTHER_MEMBER_REL)
-			{
+				in_rel->reloptkind == RELOPT_OTHER_MEMBER_REL) {
 				Assert(in_rte->relkind == RELKIND_RELATION);
 				ts_set_rel_size(root, in_rel, i, in_rte);
 			}
@@ -879,8 +833,7 @@ reenable_inheritance(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntr
 			 * the actual setting of the pathlists until after this loop,
 			 * because set_append_rel_pathlist will eventually call this hook again.
 			 */
-			if (in_rte == rte)
-			{
+			if (in_rte == rte) {
 				Assert(rti == i);
 				set_pathlist_for_current_rel = true;
 			}
@@ -891,8 +844,7 @@ reenable_inheritance(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntr
 		return;
 
 	total_pages = 0;
-	for (i = 1; i < root->simple_rel_array_size; i++)
-	{
+	for (i = 1; i < root->simple_rel_array_size; i++) {
 		RelOptInfo *brel = root->simple_rel_array[i];
 
 		if (brel == NULL)
@@ -908,8 +860,7 @@ reenable_inheritance(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntr
 	}
 	root->total_table_pages = total_pages;
 
-	if (set_pathlist_for_current_rel)
-	{
+	if (set_pathlist_for_current_rel) {
 		bool do_distributed;
 
 		Hypertable *ht = ts_planner_get_hypertable(rte->relid, CACHE_FLAG_NOCREATE);
@@ -931,16 +882,13 @@ reenable_inheritance(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntr
 		rel->partial_pathlist = NIL;
 		/* allow a session parameter to override the use of this datanode only path */
 #ifdef TS_DEBUG
-		if (do_distributed)
-		{
+		if (do_distributed) {
 			const char *allow_dn_path =
 				GetConfigOption("timescaledb.debug_allow_datanode_only_path", true, false);
-			if (allow_dn_path && pg_strcasecmp(allow_dn_path, "on") != 0)
-			{
+			if (allow_dn_path && pg_strcasecmp(allow_dn_path, "on") != 0) {
 				do_distributed = false;
 				elog(DEBUG2, "creating per chunk append paths");
-			}
-			else
+			} else
 				elog(DEBUG2, "avoiding per chunk append paths");
 		}
 #endif
@@ -950,15 +898,15 @@ reenable_inheritance(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntr
 	}
 }
 
-static void
-apply_optimizations(PlannerInfo *root, TsRelType reltype, RelOptInfo *rel, RangeTblEntry *rte,
-					Hypertable *ht)
-{
+static void apply_optimizations(PlannerInfo *root,
+								TsRelType reltype,
+								RelOptInfo *rel,
+								RangeTblEntry *rte,
+								Hypertable *ht) {
 	if (!ts_guc_enable_optimizations)
 		return;
 
-	switch (reltype)
-	{
+	switch (reltype) {
 		case TS_REL_HYPERTABLE_CHILD:
 			/* empty table so nothing to optimize */
 			break;
@@ -988,8 +936,7 @@ apply_optimizations(PlannerInfo *root, TsRelType reltype, RelOptInfo *rel, Range
 		 */
 		root->parse->resultRelation == 0
 #endif
-	)
-	{
+	) {
 		TimescaleDBPrivate *private = ts_get_private_reloptinfo(rel);
 		bool ordered = private->appends_ordered;
 		int order_attno = private->order_attno;
@@ -998,12 +945,10 @@ apply_optimizations(PlannerInfo *root, TsRelType reltype, RelOptInfo *rel, Range
 
 		Assert(ht != NULL);
 
-		foreach (lc, rel->pathlist)
-		{
+		foreach (lc, rel->pathlist) {
 			Path **pathptr = (Path **) &lfirst(lc);
 
-			switch (nodeTag(*pathptr))
-			{
+			switch (nodeTag(*pathptr)) {
 				case T_AppendPath:
 				case T_MergeAppendPath:
 					if (should_chunk_append(ht, root, rel, *pathptr, ordered, order_attno))
@@ -1022,12 +967,10 @@ apply_optimizations(PlannerInfo *root, TsRelType reltype, RelOptInfo *rel, Range
 			}
 		}
 
-		foreach (lc, rel->partial_pathlist)
-		{
+		foreach (lc, rel->partial_pathlist) {
 			Path **pathptr = (Path **) &lfirst(lc);
 
-			switch (nodeTag(*pathptr))
-			{
+			switch (nodeTag(*pathptr)) {
 				case T_AppendPath:
 				case T_MergeAppendPath:
 					if (should_chunk_append(ht, root, rel, *pathptr, false, 0))
@@ -1044,29 +987,27 @@ apply_optimizations(PlannerInfo *root, TsRelType reltype, RelOptInfo *rel, Range
 }
 
 static bool
-valid_hook_call(void)
-{
+valid_hook_call(void) {
 	return ts_extension_is_loaded() && planner_hcache_exists();
 }
 
 static bool
-dml_involves_hypertable(PlannerInfo *root, Hypertable *ht, Index rti)
-{
+dml_involves_hypertable(PlannerInfo *root, Hypertable *ht, Index rti) {
 	Index result_rti = root->parse->resultRelation;
 	RangeTblEntry *result_rte = planner_rt_fetch(result_rti, root);
 
 	return result_rti == rti || ht->main_table_relid == result_rte->relid;
 }
 
-static void
-timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, RangeTblEntry *rte)
-{
+static void timescaledb_set_rel_pathlist(PlannerInfo *root,
+										 RelOptInfo *rel,
+										 Index rti,
+										 RangeTblEntry *rte) {
 	TsRelType reltype;
 	Hypertable *ht;
 
 	/* Quick exit if this is a relation we're not interested in */
-	if (!valid_hook_call() || !OidIsValid(rte->relid) || IS_DUMMY_REL(rel))
-	{
+	if (!valid_hook_call() || !OidIsValid(rte->relid) || IS_DUMMY_REL(rel)) {
 		if (prev_set_rel_pathlist_hook != NULL)
 			(*prev_set_rel_pathlist_hook)(root, rel, rti, rte);
 		return;
@@ -1085,14 +1026,12 @@ timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
 	if (ts_cm_functions->set_rel_pathlist != NULL)
 		ts_cm_functions->set_rel_pathlist(root, rel, rti, rte);
 
-	switch (reltype)
-	{
+	switch (reltype) {
 		case TS_REL_HYPERTABLE_CHILD:
 			break;
 		case TS_REL_CHUNK:
 		case TS_REL_CHUNK_CHILD:
-			if (IS_UPDL_CMD(root->parse))
-			{
+			if (IS_UPDL_CMD(root->parse)) {
 				BaserelInfoEntry *chunk_cache_entry =
 					BaserelInfo_lookup(ts_baserel_info, rte->relid);
 				Assert(chunk_cache_entry != NULL);
@@ -1106,8 +1045,7 @@ timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
 																 CHUNK_DELETE);
 			}
 			/* Check for UPDATE/DELETE (DML) on compressed chunks */
-			if (IS_UPDL_CMD(root->parse) && dml_involves_hypertable(root, ht, rti))
-			{
+			if (IS_UPDL_CMD(root->parse) && dml_involves_hypertable(root, ht, rti)) {
 				if (ts_cm_functions->set_rel_pathlist_dml != NULL)
 					ts_cm_functions->set_rel_pathlist_dml(root, rel, rti, rte, ht);
 				break;
@@ -1125,8 +1063,7 @@ timescaledb_set_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, Index rti, Rang
  * here. */
 static void
 timescaledb_get_relation_info_hook(PlannerInfo *root, Oid relation_objectid, bool inhparent,
-								   RelOptInfo *rel)
-{
+								   RelOptInfo *rel) {
 	Hypertable *ht;
 
 	if (prev_get_relation_info_hook != NULL)
@@ -1135,10 +1072,8 @@ timescaledb_get_relation_info_hook(PlannerInfo *root, Oid relation_objectid, boo
 	if (!valid_hook_call())
 		return;
 
-	switch (classify_relation(root, rel, &ht))
-	{
-		case TS_REL_HYPERTABLE:
-		{
+	switch (classify_relation(root, rel, &ht)) {
+		case TS_REL_HYPERTABLE: {
 			/* This only works for PG12 because for earlier versions the inheritance
 			 * expansion happens too early during the planning phase
 			 */
@@ -1154,13 +1089,12 @@ timescaledb_get_relation_info_hook(PlannerInfo *root, Oid relation_objectid, boo
 			 * a second time as a real UPDATE/DELETE, but with requiredPerms set to 0, as it
 			 * assumes permission checking has been done already during the first planner call.
 			 * We don't want to touch the UPDATE/DELETEs, so we need to check all the regular
-			 * conditions here that are checked during preprocess_query, as well as the
+			 * conditions here that are checked during preprocessQuery, as well as the
 			 * condition that rte->requiredPerms is not requiring UPDATE/DELETE on this rel.
 			 */
 			if (ts_guc_enable_optimizations && ts_guc_enable_constraint_exclusion && inhparent &&
 				rte->ctename == NULL && !IS_UPDL_CMD(query) && query->resultRelation == 0 &&
-				query->rowMarks == NIL && (rte->requiredPerms & (ACL_UPDATE | ACL_DELETE)) == 0)
-			{
+				query->rowMarks == NIL && (rte->requiredPerms & (ACL_UPDATE | ACL_DELETE)) == 0) {
 				rte_mark_for_expansion(rte);
 			}
 			ts_create_private_reloptinfo(rel);
@@ -1168,17 +1102,14 @@ timescaledb_get_relation_info_hook(PlannerInfo *root, Oid relation_objectid, boo
 			break;
 		}
 		case TS_REL_CHUNK:
-		case TS_REL_CHUNK_CHILD:
-		{
+		case TS_REL_CHUNK_CHILD: {
 			ts_create_private_reloptinfo(rel);
 
-			if (ts_guc_enable_transparent_decompression && TS_HYPERTABLE_HAS_COMPRESSION_TABLE(ht))
-			{
+			if (ts_guc_enable_transparent_decompression && TS_HYPERTABLE_HAS_COMPRESSION_TABLE(ht)) {
 				RangeTblEntry *chunk_rte = planner_rt_fetch(rel->relid, root);
 				Chunk *chunk = ts_chunk_get_by_relid(chunk_rte->relid, true);
 
-				if (chunk->fd.compressed_chunk_id > 0)
-				{
+				if (chunk->fd.compressed_chunk_id > 0) {
 					Relation uncompressed_chunk = table_open(relation_objectid, NoLock);
 
 					ts_get_private_reloptinfo(rel)->compressed = true;
@@ -1230,12 +1161,10 @@ timescaledb_get_relation_info_hook(PlannerInfo *root, Oid relation_objectid, boo
 }
 
 static bool
-join_involves_hypertable(const PlannerInfo *root, const RelOptInfo *rel)
-{
+join_involves_hypertable(const PlannerInfo *root, const RelOptInfo *rel) {
 	int relid = -1;
 
-	while ((relid = bms_next_member(rel->relids, relid)) >= 0)
-	{
+	while ((relid = bms_next_member(rel->relids, relid)) >= 0) {
 		const RangeTblEntry *rte = planner_rt_fetch(relid, root);
 
 		if (rte != NULL)
@@ -1248,8 +1177,7 @@ join_involves_hypertable(const PlannerInfo *root, const RelOptInfo *rel)
 }
 
 static bool
-involves_hypertable(PlannerInfo *root, RelOptInfo *rel)
-{
+involves_hypertable(PlannerInfo *root, RelOptInfo *rel) {
 	if (rel->reloptkind == RELOPT_JOINREL)
 		return join_involves_hypertable(root, rel);
 
@@ -1311,34 +1239,30 @@ involves_hypertable(PlannerInfo *root, RelOptInfo *rel)
  *
  */
 static List *
-replace_hypertable_modify_paths(PlannerInfo *root, List *pathlist, RelOptInfo *input_rel)
-{
+replace_hypertable_modify_paths(PlannerInfo *root, List *pathlist, RelOptInfo *input_rel) {
 	List *new_pathlist = NIL;
 	ListCell *lc;
 
-	foreach (lc, pathlist)
-	{
+	foreach (lc, pathlist) {
 		Path *path = lfirst(lc);
 
-		if (IsA(path, ModifyTablePath))
-		{
-			ModifyTablePath *mt = castNode(ModifyTablePath, path);
+		if (IsA(path, ModifyTablePath)) {
+			ModifyTablePath *modifyTablePath = castNode(ModifyTablePath, path);
 
 #if PG14_GE
 			/* We only route UPDATE/DELETE through our CustomNode for PG 14+ because
 			 * the codepath for earlier versions is different. */
-			if (mt->operation == CMD_INSERT || mt->operation == CMD_UPDATE ||
-				mt->operation == CMD_DELETE)
+			if (modifyTablePath->operation == CMD_INSERT || modifyTablePath->operation == CMD_UPDATE ||
+				modifyTablePath->operation == CMD_DELETE)
 #else
-			if (mt->operation == CMD_INSERT)
+			if (modifyTablePath->operation == CMD_INSERT)
 #endif
 			{
-				RangeTblEntry *rte = planner_rt_fetch(mt->nominalRelation, root);
-				Hypertable *ht = ts_planner_get_hypertable(rte->relid, CACHE_FLAG_CHECK);
+				RangeTblEntry *rte = planner_rt_fetch(modifyTablePath->nominalRelation, root);
+				Hypertable *hypertable = ts_planner_get_hypertable(rte->relid, CACHE_FLAG_CHECK);
 
-				if (ht && (mt->operation == CMD_INSERT || !hypertable_is_distributed(ht)))
-				{
-					path = ts_hypertable_modify_path_create(root, mt, ht, input_rel);
+				if (hypertable && (modifyTablePath->operation == CMD_INSERT || !hypertable_is_distributed(hypertable))) {
+					path = ts_hypertable_modify_path_create(root, modifyTablePath, hypertable, input_rel);
 				}
 			}
 		}
@@ -1349,10 +1273,11 @@ replace_hypertable_modify_paths(PlannerInfo *root, List *pathlist, RelOptInfo *i
 	return new_pathlist;
 }
 
-static void
-timescaledb_create_upper_paths_hook(PlannerInfo *root, UpperRelationKind stage,
-									RelOptInfo *input_rel, RelOptInfo *output_rel, void *extra)
-{
+static void timescaledb_create_upper_paths_hook(PlannerInfo *root,
+												UpperRelationKind stage,
+												RelOptInfo *input_rel,
+												RelOptInfo *output_rel,
+												void *extra) {
 	Query *parse = root->parse;
 	bool partials_found = false;
 	TsRelType reltype = TS_REL_OTHER;
@@ -1371,15 +1296,13 @@ timescaledb_create_upper_paths_hook(PlannerInfo *root, UpperRelationKind stage,
 		ts_cm_functions
 			->create_upper_paths_hook(root, stage, input_rel, output_rel, reltype, ht, extra);
 
-	if (output_rel != NULL)
-	{
+	if (output_rel != NULL) {
 		/* Modify for INSERTs on a hypertable */
 		if (output_rel->pathlist != NIL)
 			output_rel->pathlist =
 				replace_hypertable_modify_paths(root, output_rel->pathlist, input_rel);
 
-		if (parse->hasAggs && stage == UPPERREL_GROUP_AGG)
-		{
+		if (parse->hasAggs && stage == UPPERREL_GROUP_AGG) {
 			/* Existing AggPaths are modified here.
 			 * No new AggPaths should be added after this if there
 			 * are partials. */
@@ -1393,8 +1316,7 @@ timescaledb_create_upper_paths_hook(PlannerInfo *root, UpperRelationKind stage,
 	if (!involves_hypertable(root, input_rel))
 		return;
 
-	if (stage == UPPERREL_GROUP_AGG && output_rel != NULL)
-	{
+	if (stage == UPPERREL_GROUP_AGG && output_rel != NULL) {
 		if (!partials_found)
 			ts_plan_add_hashagg(root, input_rel, output_rel);
 
@@ -1404,8 +1326,7 @@ timescaledb_create_upper_paths_hook(PlannerInfo *root, UpperRelationKind stage,
 }
 
 static bool
-contain_param_exec_walker(Node *node, void *context)
-{
+contain_param_exec_walker(Node *node, void *context) {
 	if (node == NULL)
 		return false;
 
@@ -1415,20 +1336,15 @@ contain_param_exec_walker(Node *node, void *context)
 	return expression_tree_walker(node, contain_param_exec_walker, context);
 }
 
-bool
-ts_contain_param(Node *node)
-{
+bool ts_contain_param(Node *node) {
 	return contain_param_exec_walker(node, NULL);
 }
 
 static List *
-fill_missing_groupclause(List *new_groupclause, List *orig_groupclause)
-{
-	if (new_groupclause != NIL)
-	{
+fill_missing_groupclause(List *new_groupclause, List *orig_groupclause) {
+	if (new_groupclause != NIL) {
 		ListCell *gl;
-		foreach (gl, orig_groupclause)
-		{
+		foreach (gl, orig_groupclause) {
 			SortGroupClause *gc = lfirst_node(SortGroupClause, gl);
 
 			if (list_member_ptr(new_groupclause, gc))
@@ -1440,8 +1356,7 @@ fill_missing_groupclause(List *new_groupclause, List *orig_groupclause)
 }
 
 static bool
-check_cagg_view_rte(RangeTblEntry *rte)
-{
+check_cagg_view_rte(RangeTblEntry *rte) {
 	ContinuousAgg *cagg = NULL;
 	ListCell *rtlc;
 	bool found = false;
@@ -1454,8 +1369,7 @@ check_cagg_view_rte(RangeTblEntry *rte)
 	}
 
 	/* should cache this information for cont. aggregates */
-	foreach (rtlc, viewq->rtable)
-	{
+	foreach (rtlc, viewq->rtable) {
 		RangeTblEntry *rte = lfirst_node(RangeTblEntry, rtlc);
 
 		if (!OidIsValid(rte->relid))
@@ -1485,31 +1399,26 @@ check_cagg_view_rte(RangeTblEntry *rte)
 */
 static void
 cagg_reorder_groupby_clause(RangeTblEntry *subq_rte, int rtno, List *outer_sortcl,
-							List *outer_tlist)
-{
+							List *outer_tlist) {
 	bool not_found = true;
 	Query *subq;
 	ListCell *lc;
 	Assert(subq_rte->rtekind == RTE_SUBQUERY);
 	subq = subq_rte->subquery;
 	if (outer_sortcl && subq->groupClause && subq->sortClause == NIL &&
-		check_cagg_view_rte(subq_rte))
-	{
+		check_cagg_view_rte(subq_rte)) {
 		List *new_groupclause = NIL;
 		/* we are going to modify this. so make a copy and use it
 		 if we replace */
 		List *subq_groupclause_copy = copyObject(subq->groupClause);
-		foreach (lc, outer_sortcl)
-		{
+		foreach (lc, outer_sortcl) {
 			SortGroupClause *outer_sc = (SortGroupClause *) lfirst(lc);
 			TargetEntry *outer_tle = get_sortgroupclause_tle(outer_sc, outer_tlist);
 			not_found = true;
-			if (IsA(outer_tle->expr, Var) && (((Var *) outer_tle->expr)->varno == rtno))
-			{
+			if (IsA(outer_tle->expr, Var) && (((Var *) outer_tle->expr)->varno == rtno)) {
 				int outer_attno = ((Var *) outer_tle->expr)->varattno;
 				TargetEntry *subq_tle = list_nth(subq->targetList, outer_attno - 1);
-				if (subq_tle->ressortgroupref > 0)
-				{
+				if (subq_tle->ressortgroupref > 0) {
 					/* get group clause corresponding to this */
 					SortGroupClause *subq_gclause =
 						get_sortgroupref_clause(subq_tle->ressortgroupref, subq_groupclause_copy);
@@ -1524,17 +1433,14 @@ cagg_reorder_groupby_clause(RangeTblEntry *subq_rte, int rtno, List *outer_sortc
 				break;
 		}
 		/* all order by found in group by clause */
-		if (new_groupclause != NIL && not_found == false)
-		{
+		if (new_groupclause != NIL && not_found == false) {
 			/* use new groupby clause for this subquery/view */
 			subq->groupClause = fill_missing_groupclause(new_groupclause, subq_groupclause_copy);
 		}
 	}
 }
 
-void
-_planner_init(void)
-{
+void _planner_init(void) {
 	prev_planner_hook = planner_hook;
 	planner_hook = timescaledb_planner;
 
@@ -1548,9 +1454,7 @@ _planner_init(void)
 	create_upper_paths_hook = timescaledb_create_upper_paths_hook;
 }
 
-void
-_planner_fini(void)
-{
+void _planner_fini(void) {
 	planner_hook = prev_planner_hook;
 	set_rel_pathlist_hook = prev_set_rel_pathlist_hook;
 	get_relation_info_hook = prev_get_relation_info_hook;

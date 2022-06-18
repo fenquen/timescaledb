@@ -16,7 +16,7 @@
 extern void ts_indexing_verify_columns(const Hyperspace *hs, const List *indexelems);
 extern void ts_indexing_verify_index(const Hyperspace *hs, const IndexStmt *stmt);
 extern void ts_indexing_verify_indexes(const Hypertable *ht);
-extern void ts_indexing_create_default_indexes(const Hypertable *ht);
+extern void ts_indexing_create_default_indexes(const Hypertable *hypertable);
 extern ObjectAddress ts_indexing_root_table_create_index(IndexStmt *stmt, const char *queryString,
 														 bool is_multitransaction,
 														 bool is_distributed);

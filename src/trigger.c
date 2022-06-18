@@ -26,10 +26,8 @@
  * permissions to modify the chunk since CreateTrigger() performs permissions
  * checks.
  */
-void
-ts_trigger_create_on_chunk(Oid trigger_oid, const char *chunk_schema_name,
-						   const char *chunk_table_name)
-{
+void ts_trigger_create_on_chunk(Oid trigger_oid, const char *chunk_schema_name,
+								const char *chunk_table_name) {
 	Datum datum_def = DirectFunctionCall1(pg_get_triggerdef, ObjectIdGetDatum(trigger_oid));
 	const char *def = TextDatumGetCString(datum_def);
 	List *deparsed_list;
@@ -40,8 +38,7 @@ ts_trigger_create_on_chunk(Oid trigger_oid, const char *chunk_schema_name,
 	Assert(list_length(deparsed_list) == 1);
 	deparsed_node = linitial(deparsed_list);
 
-	do
-	{
+	do {
 		RawStmt *rawstmt = (RawStmt *) deparsed_node;
 		ParseState *pstate = make_parsestate(NULL);
 		Query *query;
@@ -69,43 +66,32 @@ ts_trigger_create_on_chunk(Oid trigger_oid, const char *chunk_schema_name,
 				  false,
 				  false);
 
-	CommandCounterIncrement(); /* needed to prevent pg_class being updated
-								* twice */
+	CommandCounterIncrement(); /* needed to prevent pg_class being updated twice */
 }
 
 typedef bool (*trigger_handler)(const Trigger *trigger, void *arg);
 
-static inline void
-for_each_trigger(Oid relid, trigger_handler on_trigger, void *arg)
-{
-	Relation rel;
+static inline void for_each_trigger(Oid tableOid, trigger_handler on_trigger, void *arg) {
+	Relation relation = table_open(tableOid, AccessShareLock);
 
-	rel = table_open(relid, AccessShareLock);
-
-	if (rel->trigdesc != NULL)
-	{
-		int i;
-
+	if (relation->trigdesc != NULL) {
 		/*
-		 * The TriggerDesc from rel->trigdesc seems to be modified during
-		 * iterations of the loop and sometimes gets reallocated so we
-		 * access trigdesc only through rel->trigdesc.
+		 * The TriggerDesc from relation->trigdesc seems to be modified during
+		 * iterations of the loop and sometimes gets reallocated so we access trigdesc only through relation->trigdesc.
 		 */
-		for (i = 0; i < rel->trigdesc->numtriggers; i++)
-		{
-			Trigger *trigger = &rel->trigdesc->triggers[i];
+		for (int i = 0; i < relation->trigdesc->numtriggers; i++) {
+			Trigger *trigger = &relation->trigdesc->triggers[i];
 
 			if (!on_trigger(trigger, arg))
 				break;
 		}
 	}
 
-	table_close(rel, AccessShareLock);
+	table_close(relation, AccessShareLock);
 }
 
 static bool
-create_trigger_handler(const Trigger *trigger, void *arg)
-{
+create_trigger_handler(const Trigger *trigger, void *arg) {
 	const Chunk *chunk = arg;
 
 	if (TRIGGER_USES_TRANSITION_TABLE(trigger->tgnewtable) ||
@@ -134,9 +120,7 @@ create_trigger_handler(const Trigger *trigger, void *arg)
  * We assume that the owner of the Hypertable is also the owner of the new
  * chunk.
  */
-void
-ts_trigger_create_all_on_chunk(const Chunk *chunk)
-{
+void ts_trigger_create_all_on_chunk(const Chunk *chunk) {
 	int sec_ctx;
 	Oid saved_uid;
 	Oid owner;
@@ -159,14 +143,10 @@ ts_trigger_create_all_on_chunk(const Chunk *chunk)
 		SetUserIdAndSecContext(saved_uid, sec_ctx);
 }
 
-static bool
-check_for_transition_table(const Trigger *trigger, void *arg)
-{
+static bool check_for_transition_table(const Trigger *trigger, void *arg) {
 	bool *found = arg;
 
-	if (TRIGGER_USES_TRANSITION_TABLE(trigger->tgnewtable) ||
-		TRIGGER_USES_TRANSITION_TABLE(trigger->tgoldtable))
-	{
+	if (TRIGGER_USES_TRANSITION_TABLE(trigger->tgnewtable) || TRIGGER_USES_TRANSITION_TABLE(trigger->tgoldtable)) {
 		*found = true;
 		return false;
 	}
@@ -174,12 +154,10 @@ check_for_transition_table(const Trigger *trigger, void *arg)
 	return true;
 }
 
-bool
-ts_relation_has_transition_table_trigger(Oid relid)
-{
+bool ts_relation_has_transition_table_trigger(Oid tableOid) {
 	bool found = false;
 
-	for_each_trigger(relid, check_for_transition_table, &found);
+	for_each_trigger(tableOid, check_for_transition_table, &found);
 
 	return found;
 }

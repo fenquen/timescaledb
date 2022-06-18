@@ -33,8 +33,7 @@
 --------------------
 -- A closed dimension completely divides its keyspace into a
 -- configurable number of slices. The number of slices can be
--- reconfigured, but the new partitioning only affects newly created
--- chunks.
+-- reconfigured, but the new partitioning only affects newly created chunks.
 -- The unique constraint is table_name +schema_name. The ordering is
 -- important as we want index access when we filter by table_name
 CREATE SEQUENCE _timescaledb_catalog.hypertable_id_seq MINVALUE 1;

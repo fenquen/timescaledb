@@ -6,25 +6,22 @@
 
 #include <postgres.h>
 
-typedef struct ChunkSizingInfo
-{
+typedef struct ChunkSizingInfo {
 	Oid table_relid;
 	/* Set manually */
-	Oid func;
+	Oid func; // 通过sql定义中的默认值注入
 	text *target_size;
-	const char *colname;  /* The column of the dimension we are adapting
-						   * on */
-	bool check_for_index; /* Set if we should check for an index on
-						   * the dimension we are adapting on */
+	const char *colname;  /* The column of the dimension we are adapting on 1般是时间的column*/
+	bool check_for_index; /* Set if we should check for an index on the dimension we are adapting on */
 
 	/* Validated info */
-	NameData func_name;
-	NameData func_schema;
+	NameData func_name; // ts_chunk_sizing_func_validate 注入
+	NameData func_schema; // ts_chunk_sizing_func_validate 注入
 	int64 target_size_bytes;
 } ChunkSizingInfo;
 
-extern void ts_chunk_adaptive_sizing_info_validate(ChunkSizingInfo *info);
-extern void ts_chunk_sizing_func_validate(regproc func, ChunkSizingInfo *info);
+extern void ts_chunk_adaptive_sizing_info_validate(ChunkSizingInfo *chunkSizingInfo);
+extern void ts_chunk_sizing_func_validate(regproc func, ChunkSizingInfo *chunkSizingInfo);
 extern TSDLLEXPORT ChunkSizingInfo *ts_chunk_sizing_info_get_default_disabled(Oid table_relid);
 
 extern TSDLLEXPORT int64 ts_chunk_calculate_initial_chunk_target_size(void);
