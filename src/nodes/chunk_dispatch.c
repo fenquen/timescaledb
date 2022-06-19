@@ -19,8 +19,7 @@
 #include "guc.h"
 
 ChunkDispatch *
-ts_chunk_dispatch_create(Hypertable *ht, EState *estate, int eflags)
-{
+ts_chunk_dispatch_create(Hypertable *ht, EState *estate, int eflags) {
 	ChunkDispatch *cd = palloc0(sizeof(ChunkDispatch));
 
 	cd->hypertable = ht;
@@ -36,28 +35,23 @@ ts_chunk_dispatch_create(Hypertable *ht, EState *estate, int eflags)
 }
 
 static inline ModifyTableState *
-get_modifytable_state(const ChunkDispatch *dispatch)
-{
+get_modifytable_state(const ChunkDispatch *dispatch) {
 	return dispatch->dispatch_state->mtstate;
 }
 
 static inline ModifyTable *
-get_modifytable(const ChunkDispatch *dispatch)
-{
+get_modifytable(const ChunkDispatch *dispatch) {
 	return castNode(ModifyTable, get_modifytable_state(dispatch)->ps.plan);
 }
 
-bool
-ts_chunk_dispatch_has_returning(const ChunkDispatch *dispatch)
-{
+bool ts_chunk_dispatch_has_returning(const ChunkDispatch *dispatch) {
 	if (!dispatch->dispatch_state)
 		return false;
 	return get_modifytable(dispatch)->returningLists != NIL;
 }
 
 List *
-ts_chunk_dispatch_get_returning_clauses(const ChunkDispatch *dispatch)
-{
+ts_chunk_dispatch_get_returning_clauses(const ChunkDispatch *dispatch) {
 #if PG14_LT
 	ModifyTableState *mtstate = get_modifytable_state(dispatch);
 	return list_nth(get_modifytable(dispatch)->returningLists, mtstate->mt_whichplan);
@@ -68,88 +62,77 @@ ts_chunk_dispatch_get_returning_clauses(const ChunkDispatch *dispatch)
 }
 
 List *
-ts_chunk_dispatch_get_arbiter_indexes(const ChunkDispatch *dispatch)
-{
+ts_chunk_dispatch_get_arbiter_indexes(const ChunkDispatch *dispatch) {
 	return dispatch->dispatch_state->arbiter_indexes;
 }
 
 OnConflictAction
-ts_chunk_dispatch_get_on_conflict_action(const ChunkDispatch *dispatch)
-{
+ts_chunk_dispatch_get_on_conflict_action(const ChunkDispatch *dispatch) {
 	if (!dispatch->dispatch_state)
 		return ONCONFLICT_NONE;
 	return get_modifytable(dispatch)->onConflictAction;
 }
 
 List *
-ts_chunk_dispatch_get_on_conflict_set(const ChunkDispatch *dispatch)
-{
+ts_chunk_dispatch_get_on_conflict_set(const ChunkDispatch *dispatch) {
 	return get_modifytable(dispatch)->onConflictSet;
 }
 
 CmdType
-ts_chunk_dispatch_get_cmd_type(const ChunkDispatch *dispatch)
-{
+ts_chunk_dispatch_get_cmd_type(const ChunkDispatch *dispatch) {
 	return dispatch->dispatch_state == NULL ? CMD_INSERT :
 											  dispatch->dispatch_state->mtstate->operation;
 }
 
-void
-ts_chunk_dispatch_destroy(ChunkDispatch *cd)
-{
+void ts_chunk_dispatch_destroy(ChunkDispatch *cd) {
 	ts_subspace_store_free(cd->cache);
 }
 
 static void
-destroy_chunk_insert_state(void *cis)
-{
+destroy_chunk_insert_state(void *cis) {
 	ts_chunk_insert_state_destroy((ChunkInsertState *) cis);
 }
 
-/*
- * Get the chunk insert state for the chunk that matches the given point in the
- * partitioned hyperspace.
- */
-extern ChunkInsertState *
-ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch *dispatch, Point *point,
-										 const on_chunk_changed_func on_chunk_changed, void *data)
-{
-	ChunkInsertState *cis;
-	bool cis_changed = true;
+// Get the chunk insert state for the chunk that matches the given point in the partitioned hyperspace.
+extern ChunkInsertState *ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch *chunkDispatch,
+																  Point *point,
+																  const on_chunk_changed_func on_chunk_changed,
+																  void *data) {
+	bool chunkInsertStateChanged = true;
 
 	/* Direct inserts into internal compressed hypertable is not supported.
 	 * For compression chunks are created explicitly by compress_chunk and
 	 * inserted into directly so we should never end up in this code path
 	 * for a compressed hypertable.
 	 */
-	if (dispatch->hypertable->fd.compression_state == HypertableInternalCompressionTable)
+	if (chunkDispatch->hypertable->fd.compression_state == HypertableInternalCompressionTable) {
 		elog(ERROR, "direct insert into internal compressed hypertable is not supported");
+	}
 
-	cis = ts_subspace_store_get(dispatch->cache, point);
+	ChunkInsertState *chunkInsertState = ts_subspace_store_get(chunkDispatch->cache, point);
 
-	if (NULL == cis)
-	{
-		Chunk *new_chunk;
+	if (NULL == chunkInsertState) {
+		Chunk *newChunk = ts_hypertable_get_or_create_chunk(chunkDispatch->hypertable, point);
 
-		new_chunk = ts_hypertable_get_or_create_chunk(dispatch->hypertable, point);
-
-		if (NULL == new_chunk)
+		if (NULL == newChunk) {
 			elog(ERROR, "no chunk found or created");
+		}
 
-		cis = ts_chunk_insert_state_create(new_chunk, dispatch);
-		ts_subspace_store_add(dispatch->cache, new_chunk->cube, cis, destroy_chunk_insert_state);
-	}
-	else if (cis->rel->rd_id == dispatch->prev_cis_oid && cis == dispatch->prev_cis)
-	{
+		chunkInsertState = ts_chunk_insert_state_create(newChunk, chunkDispatch);
+		ts_subspace_store_add(chunkDispatch->cache, newChunk->cube, chunkInsertState, destroy_chunk_insert_state);
+	} else if (chunkInsertState->rel->rd_id == chunkDispatch->prev_cis_oid && chunkInsertState == chunkDispatch->prev_cis) {
 		/* got the same item from cache as before */
-		cis_changed = false;
+		chunkInsertStateChanged = false;
 	}
 
-	if (cis_changed && on_chunk_changed)
-		on_chunk_changed(cis, data);
+	if (chunkInsertStateChanged && on_chunk_changed) {
+		on_chunk_changed(chunkInsertState, data);
+	}
 
-	Assert(cis != NULL);
-	dispatch->prev_cis = cis;
-	dispatch->prev_cis_oid = cis->rel->rd_id;
-	return cis;
+	Assert(chunkInsertState != NULL);
+
+	chunkDispatch->prev_cis = chunkInsertState;
+	chunkDispatch->prev_cis_oid = chunkInsertState->rel->rd_id;
+
+	return chunkInsertState;
 }

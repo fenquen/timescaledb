@@ -1005,10 +1005,11 @@ hypertable_chunk_store_add(const Hypertable *h, const Chunk *input_chunk) {
 	return cached_chunk;
 }
 
-static inline Chunk *
-hypertable_get_chunk(const Hypertable *h, const Point *point, bool create_if_not_exists,
-					 bool lock_chunk_slices) {
-	Chunk *chunk = ts_subspace_store_get(h->chunk_cache, point);
+static inline Chunk *hypertable_get_chunk(const Hypertable *hypertable,
+										  const Point *point,
+										  bool create_if_not_exists,
+										  bool lock_chunk_slices) {
+	Chunk *chunk = ts_subspace_store_get(hypertable->chunk_cache, point);
 
 	if (chunk != NULL) {
 		return chunk;
@@ -1019,22 +1020,22 @@ hypertable_get_chunk(const Hypertable *h, const Point *point, bool create_if_not
 	 * allocates a lot of transient data. We don't want this allocated on
 	 * the cache's memory context.
 	 */
-	chunk = ts_chunk_find(h, point, lock_chunk_slices);
+	chunk = ts_chunk_find(hypertable, point, lock_chunk_slices);
 
 	if (NULL == chunk) {
 		if (!create_if_not_exists)
 			return NULL;
 
-		chunk = ts_chunk_create_from_point(h,
+		chunk = ts_chunk_create_from_point(hypertable,
 										   point,
-										   NameStr(h->fd.associated_schema_name),
-										   NameStr(h->fd.associated_table_prefix));
+										   NameStr(hypertable->fd.associated_schema_name),
+										   NameStr(hypertable->fd.associated_table_prefix));
 	}
 
 	Assert(chunk != NULL);
 
 	/* Also add the chunk to the hypertable's chunk store */
-	Chunk *cached_chunk = hypertable_chunk_store_add(h, chunk);
+	Chunk *cached_chunk = hypertable_chunk_store_add(hypertable, chunk);
 
 	return cached_chunk;
 }
@@ -1046,11 +1047,11 @@ ts_hypertable_find_chunk_if_exists(const Hypertable *h, const Point *point) {
 }
 
 /* gets the chunk for a given point, creating it if it does not exist. If an
- * existing chunk exists, all its dimension slices will be locked in FOR KEY
- * SHARE mode. */
-Chunk *
-ts_hypertable_get_or_create_chunk(const Hypertable *h, const Point *point) {
-	return hypertable_get_chunk(h, point, true, true);
+ * existing chunk exists, all its dimension slices will be locked in FOR KEY SHARE mode.
+ */
+Chunk *ts_hypertable_get_or_create_chunk(const Hypertable *hypertable,
+										 const Point *point) {
+	return hypertable_get_chunk(hypertable, point, true, true);
 }
 
 bool ts_hypertable_has_tablespace(const Hypertable *ht, Oid tspc_oid) {
@@ -1528,8 +1529,8 @@ static Datum create_hypertable_datum(FunctionCallInfo fcinfo,
 	tupdesc = BlessTupleDesc(tupdesc);
 
 	values[AttrNumberGetAttrOffset(Anum_create_hypertable_id)] = Int32GetDatum(ht->fd.id);
-	values[AttrNumberGetAttrOffset(Anum_create_hypertable_schema_name)] =NameGetDatum(&ht->fd.schema_name);
-	values[AttrNumberGetAttrOffset(Anum_create_hypertable_table_name)] =NameGetDatum(&ht->fd.table_name);
+	values[AttrNumberGetAttrOffset(Anum_create_hypertable_schema_name)] = NameGetDatum(&ht->fd.schema_name);
+	values[AttrNumberGetAttrOffset(Anum_create_hypertable_table_name)] = NameGetDatum(&ht->fd.table_name);
 	values[AttrNumberGetAttrOffset(Anum_create_hypertable_created)] = BoolGetDatum(created);
 
 	tuple = heap_form_tuple(tupdesc, values, nulls);

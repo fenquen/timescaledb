@@ -47,7 +47,7 @@ typedef void (*on_chunk_changed_func)(ChunkInsertState *state, void *data);
 extern ChunkDispatch *ts_chunk_dispatch_create(Hypertable *ht, EState *estate, int eflags);
 extern void ts_chunk_dispatch_destroy(ChunkDispatch *dispatch);
 extern ChunkInsertState *
-ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch *dispatch, Point *p,
+ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch *chunkDispatch, Point *p,
 										 const on_chunk_changed_func on_chunk_changed, void *data);
 extern bool ts_chunk_dispatch_has_returning(const ChunkDispatch *dispatch);
 extern List *ts_chunk_dispatch_get_returning_clauses(const ChunkDispatch *dispatch);

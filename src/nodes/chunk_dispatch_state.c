@@ -24,8 +24,7 @@
 #include "hypertable.h"
 
 static void
-chunk_dispatch_begin(CustomScanState *node, EState *estate, int eflags)
-{
+chunk_dispatch_begin(CustomScanState *node, EState *estate, int eflags) {
 	ChunkDispatchState *state = (ChunkDispatchState *) node;
 	Hypertable *ht;
 	Cache *hypertable_cache;
@@ -48,8 +47,7 @@ chunk_dispatch_begin(CustomScanState *node, EState *estate, int eflags)
  * chunk. Called every time we switch to another chunk for inserts.
  */
 static void
-on_chunk_insert_state_changed(ChunkInsertState *cis, void *data)
-{
+on_chunk_insert_state_changed(ChunkInsertState *cis, void *data) {
 	ChunkDispatchState *state = data;
 #if PG14_LT
 	ModifyTableState *mtstate = state->mtstate;
@@ -61,9 +59,7 @@ on_chunk_insert_state_changed(ChunkInsertState *cis, void *data)
 	state->rri = cis->result_relation_info;
 }
 
-static TupleTableSlot *
-chunk_dispatch_exec(CustomScanState *node)
-{
+static TupleTableSlot *chunk_dispatch_exec(CustomScanState *node) {
 	ChunkDispatchState *state = (ChunkDispatchState *) node;
 	PlanState *substate = linitial(node->custom_ps);
 	TupleTableSlot *slot;
@@ -90,8 +86,7 @@ chunk_dispatch_exec(CustomScanState *node)
 	point = ts_hyperspace_calculate_point(ht->space, slot);
 
 	/* Save the main table's (hypertable's) ResultRelInfo */
-	if (!dispatch->hypertable_result_rel_info)
-	{
+	if (!dispatch->hypertable_result_rel_info) {
 #if PG14_LT
 		Assert(RelationGetRelid(estate->es_result_relation_info->ri_RelationDesc) ==
 			   state->hypertable_relid);
@@ -127,16 +122,14 @@ chunk_dispatch_exec(CustomScanState *node)
 	if (cis->hyper_to_chunk_map != NULL)
 		slot = execute_attr_map_slot(cis->hyper_to_chunk_map->attrMap, slot, cis->slot);
 
-	if (cis->compress_info != NULL)
-	{
+	if (cis->compress_info != NULL) {
 		/*
 		 * When the chunk is compressed, we redirect the insert to the internal compressed
 		 * chunk. However, any BEFORE ROW triggers defined on the chunk have to be executed
 		 * before we redirect the insert.
 		 */
 		if (cis->compress_info->orig_result_relation_info->ri_TrigDesc &&
-			cis->compress_info->orig_result_relation_info->ri_TrigDesc->trig_insert_before_row)
-		{
+			cis->compress_info->orig_result_relation_info->ri_TrigDesc->trig_insert_before_row) {
 			bool skip_tuple;
 			skip_tuple =
 				!ExecBRInsertTriggers(estate, cis->compress_info->orig_result_relation_info, slot);
@@ -164,8 +157,7 @@ chunk_dispatch_exec(CustomScanState *node)
 		 * the function that records invalidations directly as AFTER ROW
 		 * triggers do not work with compressed chunks.
 		 */
-		if (cis->compress_info->has_cagg_trigger)
-		{
+		if (cis->compress_info->has_cagg_trigger) {
 			Assert(ts_cm_functions->continuous_agg_call_invalidation_trigger);
 			HeapTupleTableSlot *hslot = (HeapTupleTableSlot *) orig_slot;
 			if (!hslot->tuple)
@@ -180,8 +172,7 @@ chunk_dispatch_exec(CustomScanState *node)
 }
 
 static void
-chunk_dispatch_end(CustomScanState *node)
-{
+chunk_dispatch_end(CustomScanState *node) {
 	ChunkDispatchState *state = (ChunkDispatchState *) node;
 	PlanState *substate = linitial(node->custom_ps);
 
@@ -191,8 +182,7 @@ chunk_dispatch_end(CustomScanState *node)
 }
 
 static void
-chunk_dispatch_rescan(CustomScanState *node)
-{
+chunk_dispatch_rescan(CustomScanState *node) {
 	PlanState *substate = linitial(node->custom_ps);
 
 	ExecReScan(substate);
@@ -209,9 +199,7 @@ static CustomExecMethods chunk_dispatch_state_methods = {
 /*
  * Check whether the PlanState is a ChunkDispatchState node.
  */
-bool
-ts_is_chunk_dispatch_state(PlanState *state)
-{
+bool ts_is_chunk_dispatch_state(PlanState *state) {
 	CustomScanState *csstate = (CustomScanState *) state;
 
 	if (!IsA(state, CustomScanState))
@@ -221,8 +209,7 @@ ts_is_chunk_dispatch_state(PlanState *state)
 }
 
 ChunkDispatchState *
-ts_chunk_dispatch_state_create(Oid hypertable_relid, Plan *subplan)
-{
+ts_chunk_dispatch_state_create(Oid hypertable_relid, Plan *subplan) {
 	ChunkDispatchState *state;
 
 	state = (ChunkDispatchState *) newNode(sizeof(ChunkDispatchState), T_CustomScanState);
@@ -241,9 +228,7 @@ ts_chunk_dispatch_state_create(Oid hypertable_relid, Plan *subplan)
  * which guarantees that the ModifyTableState is fully initialized even though
  * ChunkDispatchState is a child of ModifyTableState.
  */
-void
-ts_chunk_dispatch_state_set_parent(ChunkDispatchState *state, ModifyTableState *mtstate)
-{
+void ts_chunk_dispatch_state_set_parent(ChunkDispatchState *state, ModifyTableState *mtstate) {
 	ModifyTable *mt_plan = castNode(ModifyTable, mtstate->ps.plan);
 
 	/* Inserts on hypertables should always have one subplan */

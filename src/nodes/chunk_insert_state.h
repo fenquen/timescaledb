@@ -21,8 +21,7 @@
  * do now work with the PG infrastructure.
  * Note: the 2nd trigger arg is required for distributed hypertables.
  */
-typedef struct CompressChunkInsertState
-{
+typedef struct CompressChunkInsertState {
 	Relation compress_rel;					  /*compressed chunk */
 	ResultRelInfo *orig_result_relation_info; /*original chunk */
 	CompressSingleRowState *compress_state;
@@ -33,10 +32,10 @@ typedef struct CompressChunkInsertState
 
 typedef struct TSCopyMultiInsertBuffer TSCopyMultiInsertBuffer;
 
-typedef struct ChunkInsertState
-{
+typedef struct ChunkInsertState {
 	Relation rel;
 	ResultRelInfo *result_relation_info;
+
 	/* Per-chunk arbiter indexes for ON CONFLICT handling */
 	List *arbiter_indexes;
 
@@ -82,7 +81,7 @@ typedef struct ChunkInsertState
 
 typedef struct ChunkDispatch ChunkDispatch;
 
-extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk, ChunkDispatch *dispatch);
+extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk, ChunkDispatch *chunkDispatch);
 extern void ts_chunk_insert_state_destroy(ChunkInsertState *state);
 extern void ts_compress_chunk_invoke_cagg_trigger(CompressChunkInsertState *compress_info,
 												  Relation chunk_rel, HeapTuple tuple);

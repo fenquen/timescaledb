@@ -65,13 +65,12 @@ typedef struct Chunk
 {
 	FormData_chunk fd;
 	char relkind;
-	Oid table_id;
-	Oid hypertable_relid;
+	Oid table_id; // 写入的表的id
+	Oid hypertable_relid; // 原表的的oid
 
 	/*
-	 * The hypercube defines the chunks position in the N-dimensional space.
-	 * Each of the N slices in the cube corresponds to a constraint on the
-	 * chunk table.
+	 * hypercube defines the chunk position in the N-dimensional space.
+	 * Each of the N slices in the cube corresponds to a constraint on the chunk table.
 	 */
 	Hypercube *cube;
 	ChunkConstraints *constraints;
@@ -83,7 +82,7 @@ typedef struct Chunk
 	List *data_nodes;
 } Chunk;
 
-/* This structure is used during the join of the chunk constraints to find
+/* used during the join of the chunk constraints to find
  * chunks that match all constraints. It is a stripped down version of the chunk
  * since we don't want to fill in all the fields until we find a match. */
 typedef struct ChunkStub
@@ -140,7 +139,7 @@ typedef struct DisplayKeyData
 } DisplayKeyData;
 
 extern void ts_chunk_formdata_fill(FormData_chunk *fd, const TupleInfo *ti);
-extern Chunk *ts_chunk_create_from_point(const Hypertable *ht, const Point *p, const char *schema,
+extern Chunk *ts_chunk_create_from_point(const Hypertable *hypertable, const Point *point, const char *schema,
 										 const char *prefix);
 
 extern TSDLLEXPORT Chunk *ts_chunk_create_base(int32 id, int16 num_constraints, const char relkind);

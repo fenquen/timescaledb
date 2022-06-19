@@ -1,0 +1,64 @@
+INSERT INTO aiot("time", "value") VALUES (NOW(), 'a');
+
+
+INSERT INTO aiot("time", "value") VALUES ('2022-06-10 10:14:48'::TIMESTAMP, 'a');
+
+
+SELECT pg_backend_pid();
+使得schema visible
+    GRANT USAGE ON SCHEMA pg_catalog TO PUBLIC;
+
+
+
+
+用来篡改默认行为的函数集合
+
+
+                    timescaledb_create_upper_paths_hook
+
+                        replace_hypertable_modify_paths()
+
+                            ts_hypertable_modify_path_create() // 注入 hypertable_modify_path_methods
+
+                                ts_chunk_dispatch_path_create() // 注入 chunk_dispatch_path_methods
+
+                                    static CustomPathMethods chunk_dispatch_path_methods = {
+                                        .CustomName = "ChunkDispatchPath",
+                                        .PlanCustomPath = chunk_dispatch_plan_create, // 该函数注入 chunk_dispatch_plan_methods
+                                    };
+
+                                        static CustomScanMethods chunk_dispatch_plan_methods = {
+                                            .CustomName = "ChunkDispatch",
+                                            .CreateCustomScanState = create_chunk_dispatch_state, // 该函数注入 chunk_dispatch_state_methods
+                                        };
+
+                                            static CustomExecMethods chunk_dispatch_state_methods = {
+                                                .CustomName = "ChunkDispatchState",
+                                                .BeginCustomScan = chunk_dispatch_begin,
+                                                .EndCustomScan = chunk_dispatch_end,
+                                                .ExecCustomScan = chunk_dispatch_exec,
+                                                    ts_chunk_dispatch_get_chunk_insert_state()
+                                                        ts_hypertable_get_or_create_chunk()
+                                                .ReScanCustomScan = chunk_dispatch_rescan,
+                                            };
+
+                                    static CustomPathMethods hypertable_modify_path_methods = {
+                                        .CustomName = "HypertableModifyPath",
+                                        .PlanCustomPath = hypertable_modify_plan_create, // 注入 hypertable_modify_plan_methods
+                                    };
+
+                                          static CustomScanMethods hypertable_modify_plan_methods = {
+                                              .CustomName = "HypertableModify",
+                                              .CreateCustomScanState = hypertable_modify_state_create, // 注入 hypertable_modify_state_methods
+                                          };
+
+                                              static CustomExecMethods hypertable_modify_state_methods = {
+                                                  .CustomName = "HypertableModifyState",
+                                                  .BeginCustomScan = hypertable_modify_begin,
+                                                  .EndCustomScan = hypertable_modify_end,
+                                                  .ExecCustomScan = hypertable_modify_exec,
+                                                  .ReScanCustomScan = hypertable_modify_rescan,
+                                                  .ExplainCustomScan = hypertable_modify_explain,
+                                              };
+
+

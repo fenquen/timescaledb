@@ -83,7 +83,7 @@ chunk_dispatch_plan_create(PlannerInfo *root, RelOptInfo *relopt, CustomPath *be
 
 static CustomPathMethods chunk_dispatch_path_methods = {
 	.CustomName = "ChunkDispatchPath",
-	.PlanCustomPath = chunk_dispatch_plan_create,
+	.PlanCustomPath = chunk_dispatch_plan_create, // 该函数注入chunk_dispatch_plan_methods
 };
 
 Path *
@@ -96,7 +96,7 @@ ts_chunk_dispatch_path_create(PlannerInfo *root, ModifyTablePath *mtpath, Index 
 #else
 	Path *subpath = mtpath->subpath;
 #endif
-	RangeTblEntry *rte = planner_rt_fetch(hypertable_rti, root);
+	RangeTblEntry *rte = planner_rt_fetch(hypertable_rti, root);// 对应目标表
 
 	memcpy(&path->cpath.path, subpath, sizeof(Path));
 	path->cpath.path.type = T_CustomPath;

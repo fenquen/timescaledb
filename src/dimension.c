@@ -851,7 +851,7 @@ ts_hyperspace_calculate_point(const Hyperspace *hs, TupleTableSlot *slot) {
 	int i;
 
 	for (i = 0; i < hs->num_dimensions; i++) {
-		const Dimension *d = &hs->dimensions[i];
+		const Dimension *d = &hs->dimensions[i];// 得到了在_timescaledb_catalog.dimension表的对应记录
 		Datum datum;
 		bool isnull;
 		Oid dimtype;
@@ -863,7 +863,7 @@ ts_hyperspace_calculate_point(const Hyperspace *hs, TupleTableSlot *slot) {
 
 		switch (d->type) {
 			case DIMENSION_TYPE_OPEN:
-				dimtype = ts_dimension_get_partition_type(d);
+				dimtype = ts_dimension_get_partition_type(d); // TIMESTAMPOID
 
 				if (isnull)
 					ereport(ERROR,

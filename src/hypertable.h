@@ -47,7 +47,7 @@ enum {
 
 typedef struct Hypertable {
 	FormData_hypertable fd;
-	Oid main_table_relid;
+	Oid main_table_relid; // 原表
 	Oid chunk_sizing_func;
 	Hyperspace *space;
 	SubspaceStore *chunk_cache;
@@ -127,7 +127,7 @@ extern TSDLLEXPORT Oid ts_hypertable_id_to_relid(int32 hypertable_id);
 extern TSDLLEXPORT int32 ts_hypertable_relid_to_id(Oid relid);
 extern TSDLLEXPORT Chunk *ts_hypertable_find_chunk_if_exists(const Hypertable *h,
 															 const Point *point);
-extern TSDLLEXPORT Chunk *ts_hypertable_get_or_create_chunk(const Hypertable *h,
+extern TSDLLEXPORT Chunk *ts_hypertable_get_or_create_chunk(const Hypertable *hypertable,
 															const Point *point);
 extern Oid ts_hypertable_relid(RangeVar *rv);
 extern TSDLLEXPORT bool ts_is_hypertable(Oid relid);

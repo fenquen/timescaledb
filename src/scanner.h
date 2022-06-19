@@ -113,7 +113,7 @@ typedef struct ScannerCtx
 	const ScanTupLock *tuplock;
 	ScanDirection scandirection;
 	Snapshot snapshot; /* Snapshot requested by the caller. Set automatically when NULL */
-	void *data;		   /* User-provided data passed on to filter() and tuple_found() */
+	void *data;		   /* 找到的东西注入到这里 User-provided data passed on to filter() and tuple_found() */
 
 	/*
 	 * Optional handler called before a scan starts, but relation locks are acquired.
