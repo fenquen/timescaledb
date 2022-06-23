@@ -3926,8 +3926,7 @@ bool ts_chunk_is_uncompressed_or_unordered(const Chunk *chunk) {
 			!ts_flags_are_set_32(chunk->fd.status, CHUNK_STATUS_COMPRESSED));
 }
 
-static const char *
-get_chunk_operation_str(ChunkOperation cmd) {
+static const char *get_chunk_operation_str(ChunkOperation cmd) {
 	switch (cmd) {
 		case CHUNK_INSERT:
 			return "Insert";
@@ -3946,11 +3945,12 @@ get_chunk_operation_str(ChunkOperation cmd) {
 	}
 }
 
-void ts_chunk_validate_chunk_status_for_operation(Oid chunk_relid, int32 chunk_status,
-												  ChunkOperation cmd) {
-	if (ts_flags_are_set_32(chunk_status, CHUNK_STATUS_FROZEN)) {
-		/* Data modification is not premitted on a frozen chunk */
-		switch (cmd) {
+void ts_chunk_validate_chunk_status_for_operation(Oid chunkTableOid,
+												  int32 chunkStatus,
+												  ChunkOperation chunkOperation) {
+	if (ts_flags_are_set_32(chunkStatus, CHUNK_STATUS_FROZEN)) {
+		/* Data modification is not permitted on a frozen chunk */
+		switch (chunkOperation) {
 			case CHUNK_INSERT:
 			case CHUNK_DELETE:
 			case CHUNK_UPDATE:
@@ -3958,12 +3958,12 @@ void ts_chunk_validate_chunk_status_for_operation(Oid chunk_relid, int32 chunk_s
 			case CHUNK_DECOMPRESS: {
 				elog(ERROR,
 					 "%s not permitted on frozen chunk \"%s\" ",
-					 get_chunk_operation_str(cmd),
-					 get_rel_name(chunk_relid));
+					 get_chunk_operation_str(chunkOperation),
+					 get_rel_name(chunkTableOid));
 				break;
 			}
 			default:
-				break; /*supported operations */
+				break;
 		}
 	}
 }

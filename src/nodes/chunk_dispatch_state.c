@@ -59,105 +59,102 @@ on_chunk_insert_state_changed(ChunkInsertState *cis, void *data) {
 	state->rri = cis->result_relation_info;
 }
 
-static TupleTableSlot *chunk_dispatch_exec(CustomScanState *node) {
-	ChunkDispatchState *state = (ChunkDispatchState *) node;
-	PlanState *substate = linitial(node->custom_ps);
-	TupleTableSlot *slot;
-	Point *point;
-	ChunkInsertState *cis;
-	ChunkDispatch *dispatch = state->dispatch;
-	Hypertable *ht = dispatch->hypertable;
-	EState *estate = node->ss.ps.state;
-	MemoryContext old;
+static TupleTableSlot *chunk_dispatch_exec(CustomScanState *customScanState) {
+	ChunkDispatchState *chunkDispatchState = (ChunkDispatchState *) customScanState;
+	PlanState *planState = linitial(customScanState->custom_ps);
 
-	/* Get the next tuple from the subplan state node */
-	slot = ExecProcNode(substate);
+	ChunkDispatch *chunkDispatch = chunkDispatchState->dispatch;
+	Hypertable *hypertable = chunkDispatch->hypertable;
+	EState *estate = customScanState->ss.ps.state;
 
-	if (TupIsNull(slot))
+	/* get the next tuple from the sub plan chunkDispatchState customScanState */
+	TupleTableSlot *tupleTableSlot = ExecProcNode(planState);
+
+	if (TupIsNull(tupleTableSlot)) {
 		return NULL;
+	}
 
 	/* Reset the per-tuple exprcontext */
 	ResetPerTupleExprContext(estate);
 
 	/* Switch to the executor's per-tuple memory context */
-	old = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
+	MemoryContext old = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 
 	/* Calculate the tuple's point in the N-dimensional hyperspace */
-	point = ts_hyperspace_calculate_point(ht->space, slot);
+	Point *point = ts_hyperspace_calculate_point(hypertable->space, tupleTableSlot);
 
-	/* Save the main table's (hypertable's) ResultRelInfo */
-	if (!dispatch->hypertable_result_rel_info) {
+	/* save the main table's (hypertable's) ResultRelInfo */
+	if (!chunkDispatch->hypertable_result_rel_info) {
 #if PG14_LT
-		Assert(RelationGetRelid(estate->es_result_relation_info->ri_RelationDesc) ==
-			   state->hypertable_relid);
-		dispatch->hypertable_result_rel_info = estate->es_result_relation_info;
+		Assert(RelationGetRelid(estate->es_result_relation_info->ri_RelationDesc) == chunkDispatchState->hypertable_relid);
+		chunkDispatch->hypertable_result_rel_info = estate->es_result_relation_info;
 #else
-		dispatch->hypertable_result_rel_info = dispatch->dispatch_state->mtstate->resultRelInfo;
+		chunkDispatch->hypertable_result_rel_info = chunkDispatch->dispatch_state->mtstate->resultRelInfo;
 #endif
 	}
 
-	/* Find or create the insert state matching the point */
-	cis = ts_chunk_dispatch_get_chunk_insert_state(dispatch,
-												   point,
-												   on_chunk_insert_state_changed,
-												   state);
+	/* Find or create the insert chunkDispatchState matching the point */
+	ChunkInsertState *chunkInsertState = ts_chunk_dispatch_get_chunk_insert_state(chunkDispatch,
+																				  point,
+																				  on_chunk_insert_state_changed,
+																				  chunkDispatchState);
 
 	/*
-	 * Set the result relation in the executor state to the target chunk.
+	 * Set the result relation in the executor chunkDispatchState to the target chunk.
 	 * This makes sure that the tuple gets inserted into the correct
 	 * chunk. Note that since in PG < 14 the ModifyTable executor saves and restores
 	 * the es_result_relation_info this has to be updated every time, not
 	 * just when the chunk changes.
 	 */
 #if PG14_LT
-	if (cis->compress_info != NULL)
-		estate->es_result_relation_info = cis->compress_info->orig_result_relation_info;
+	if (chunkInsertState->compress_info != NULL)
+		estate->es_result_relation_info = chunkInsertState->compress_info->orig_result_relation_info;
 	else
-		estate->es_result_relation_info = cis->result_relation_info;
+		estate->es_result_relation_info = chunkInsertState->result_relation_info;
 #endif
 
 	MemoryContextSwitchTo(old);
 
-	/* Convert the tuple to the chunk's rowtype, if necessary */
-	if (cis->hyper_to_chunk_map != NULL)
-		slot = execute_attr_map_slot(cis->hyper_to_chunk_map->attrMap, slot, cis->slot);
+	/* Convert the tuple to the chunk's row type, if necessary */
+	if (chunkInsertState->hyper_to_chunk_map != NULL)
+		tupleTableSlot = execute_attr_map_slot(chunkInsertState->hyper_to_chunk_map->attrMap, tupleTableSlot, chunkInsertState->slot);
 
-	if (cis->compress_info != NULL) {
+	if (chunkInsertState->compress_info != NULL) {
 		/*
 		 * When the chunk is compressed, we redirect the insert to the internal compressed
 		 * chunk. However, any BEFORE ROW triggers defined on the chunk have to be executed
 		 * before we redirect the insert.
 		 */
-		if (cis->compress_info->orig_result_relation_info->ri_TrigDesc &&
-			cis->compress_info->orig_result_relation_info->ri_TrigDesc->trig_insert_before_row) {
+		if (chunkInsertState->compress_info->orig_result_relation_info->ri_TrigDesc &&
+			chunkInsertState->compress_info->orig_result_relation_info->ri_TrigDesc->trig_insert_before_row) {
 			bool skip_tuple;
 			skip_tuple =
-				!ExecBRInsertTriggers(estate, cis->compress_info->orig_result_relation_info, slot);
+				!ExecBRInsertTriggers(estate, chunkInsertState->compress_info->orig_result_relation_info, tupleTableSlot);
 
 			if (skip_tuple)
 				return NULL;
 		}
 
-		if (cis->rel->rd_att->constr && cis->rel->rd_att->constr->has_generated_stored)
-			ExecComputeStoredGeneratedCompat(cis->compress_info->orig_result_relation_info,
+		if (chunkInsertState->rel->rd_att->constr && chunkInsertState->rel->rd_att->constr->has_generated_stored)
+			ExecComputeStoredGeneratedCompat(chunkInsertState->compress_info->orig_result_relation_info,
 											 estate,
-											 slot,
+											 tupleTableSlot,
 											 CMD_INSERT);
 
-		if (cis->rel->rd_att->constr)
-			ExecConstraints(cis->compress_info->orig_result_relation_info, slot, estate);
+		if (chunkInsertState->rel->rd_att->constr)
+			ExecConstraints(chunkInsertState->compress_info->orig_result_relation_info, tupleTableSlot, estate);
 
 #if PG14_LT
-		estate->es_result_relation_info = cis->result_relation_info;
+		estate->es_result_relation_info = chunkInsertState->result_relation_info;
 #endif
 		Assert(ts_cm_functions->compress_row_exec != NULL);
-		TupleTableSlot *orig_slot = slot;
-		slot = ts_cm_functions->compress_row_exec(cis->compress_info->compress_state, slot);
+		TupleTableSlot *orig_slot = tupleTableSlot;
+		tupleTableSlot = ts_cm_functions->compress_row_exec(chunkInsertState->compress_info->compress_state, tupleTableSlot);
 		/* If we have cagg defined on the hypertable, we have to execute
 		 * the function that records invalidations directly as AFTER ROW
 		 * triggers do not work with compressed chunks.
 		 */
-		if (cis->compress_info->has_cagg_trigger) {
+		if (chunkInsertState->compress_info->has_cagg_trigger) {
 			Assert(ts_cm_functions->continuous_agg_call_invalidation_trigger);
 			HeapTupleTableSlot *hslot = (HeapTupleTableSlot *) orig_slot;
 			if (!hslot->tuple)
@@ -165,10 +162,10 @@ static TupleTableSlot *chunk_dispatch_exec(CustomScanState *node) {
 											   orig_slot->tts_values,
 											   orig_slot->tts_isnull);
 
-			ts_compress_chunk_invoke_cagg_trigger(cis->compress_info, cis->rel, hslot->tuple);
+			ts_compress_chunk_invoke_cagg_trigger(chunkInsertState->compress_info, chunkInsertState->rel, hslot->tuple);
 		}
 	}
-	return slot;
+	return tupleTableSlot;
 }
 
 static void

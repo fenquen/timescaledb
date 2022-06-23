@@ -29,16 +29,14 @@
 #define RECOMPRESS_CHUNK_FUNCNAME "recompress_chunk"
 #define RECOMPRESS_CHUNK_NARGS 2
 
-typedef enum ChunkCompressionStatus
-{
+typedef enum ChunkCompressionStatus {
 	CHUNK_COMPRESS_NONE = 0,
 	CHUNK_COMPRESS_UNORDERED,
 	CHUNK_COMPRESS_ORDERED,
 	CHUNK_DROPPED
 } ChunkCompressionStatus;
 
-typedef enum ChunkOperation
-{
+typedef enum ChunkOperation {
 	CHUNK_DROP = 0,
 	CHUNK_INSERT,
 	CHUNK_UPDATE,
@@ -61,16 +59,15 @@ typedef struct Hypertable Hypertable;
  * boundaries of the cube is represented by a collection of slices from the N
  * distinct dimensions.
  */
-typedef struct Chunk
-{
+typedef struct Chunk {
 	FormData_chunk fd;
 	char relkind;
-	Oid table_id; // 写入的表的id
-	Oid hypertable_relid; // 原表的的oid
+	Oid table_id;		  // 写入的表的id
+	Oid hypertable_relid; // hypertable对应的原表的的oid
 
 	/*
 	 * hypercube defines the chunk position in the N-dimensional space.
-	 * Each of the N slices in the cube corresponds to a constraint on the chunk table.
+	 * Each of the N slices in the cube corresponds to a constraint on the chunk table. chunk对应的表上会有对字段值的上下限的限制
 	 */
 	Hypercube *cube;
 	ChunkConstraints *constraints;
@@ -85,8 +82,7 @@ typedef struct Chunk
 /* used during the join of the chunk constraints to find
  * chunks that match all constraints. It is a stripped down version of the chunk
  * since we don't want to fill in all the fields until we find a match. */
-typedef struct ChunkStub
-{
+typedef struct ChunkStub {
 	int32 id;
 	Hypercube *cube;
 	ChunkConstraints *constraints;
@@ -99,8 +95,7 @@ typedef struct ChunkStub
  * For every matching constraint, a corresponding chunk will be created in the
  * context's hash table, keyed on the chunk ID.
  */
-typedef struct ChunkScanCtx
-{
+typedef struct ChunkScanCtx {
 	HTAB *htab;
 	char relkind; /* Create chunks of this relkind */
 	const Hyperspace *space;
@@ -117,14 +112,12 @@ typedef struct ChunkScanCtx
  * false. Used to find a stub matching a point in an N-dimensional
  * hyperspace. */
 static inline bool
-chunk_stub_is_complete(const ChunkStub *stub, const Hyperspace *space)
-{
+chunk_stub_is_complete(const ChunkStub *stub, const Hyperspace *space) {
 	return space->num_dimensions == stub->constraints->num_dimension_constraints;
 }
 
 /* The hash table entry for the ChunkScanCtx */
-typedef struct ChunkScanEntry
-{
+typedef struct ChunkScanEntry {
 	int32 chunk_id;
 	ChunkStub *stub;
 } ChunkScanEntry;
@@ -132,8 +125,7 @@ typedef struct ChunkScanEntry
 /*
  * Information to be able to display a scan key details for error messages.
  */
-typedef struct DisplayKeyData
-{
+typedef struct DisplayKeyData {
 	const char *name;
 	const char *(*as_string)(Datum);
 } DisplayKeyData;
@@ -196,9 +188,9 @@ extern TSDLLEXPORT Chunk *ts_chunk_get_compressed_chunk_parent(const Chunk *chun
 extern TSDLLEXPORT bool ts_chunk_is_unordered(const Chunk *chunk);
 extern TSDLLEXPORT bool ts_chunk_is_compressed(const Chunk *chunk);
 extern TSDLLEXPORT bool ts_chunk_is_uncompressed_or_unordered(const Chunk *chunk);
-extern TSDLLEXPORT void ts_chunk_validate_chunk_status_for_operation(Oid chunk_relid,
-																	 int32 chunk_status,
-																	 ChunkOperation cmd);
+extern TSDLLEXPORT void ts_chunk_validate_chunk_status_for_operation(Oid chunkTableOid,
+																	 int32 chunkStatus,
+																	 ChunkOperation chunkOperation);
 
 extern TSDLLEXPORT bool ts_chunk_contains_compressed_data(const Chunk *chunk);
 extern TSDLLEXPORT ChunkCompressionStatus ts_chunk_get_compression_status(int32 chunk_id);
@@ -222,18 +214,18 @@ extern void ts_chunk_scan_iterator_set_chunk_id(ScanIterator *it, int32 chunk_id
 extern bool ts_chunk_lock_if_exists(Oid chunk_oid, LOCKMODE chunk_lockmode);
 extern int ts_chunk_oid_cmp(const void *p1, const void *p2);
 
-#define chunk_get_by_name(schema_name, table_name, fail_if_not_found)                              \
-	ts_chunk_get_by_name_with_memory_context(schema_name,                                          \
-											 table_name,                                           \
-											 CurrentMemoryContext,                                 \
+#define chunk_get_by_name(schema_name, table_name, fail_if_not_found) \
+	ts_chunk_get_by_name_with_memory_context(schema_name,             \
+											 table_name,              \
+											 CurrentMemoryContext,    \
 											 fail_if_not_found)
 
-#define IS_VALID_CHUNK(chunk)                                                                      \
-	((chunk) && !(chunk)->fd.dropped && (chunk)->fd.id > 0 && (chunk)->fd.hypertable_id > 0 &&     \
-	 OidIsValid((chunk)->table_id) && OidIsValid((chunk)->hypertable_relid) &&                     \
-	 (chunk)->constraints && (chunk)->cube &&                                                      \
-	 (chunk)->cube->num_slices == (chunk)->constraints->num_dimension_constraints &&               \
-	 ((chunk)->relkind == RELKIND_RELATION ||                                                      \
+#define IS_VALID_CHUNK(chunk)                                                                  \
+	((chunk) && !(chunk)->fd.dropped && (chunk)->fd.id > 0 && (chunk)->fd.hypertable_id > 0 && \
+	 OidIsValid((chunk)->table_id) && OidIsValid((chunk)->hypertable_relid) &&                 \
+	 (chunk)->constraints && (chunk)->cube &&                                                  \
+	 (chunk)->cube->num_slices == (chunk)->constraints->num_dimension_constraints &&           \
+	 ((chunk)->relkind == RELKIND_RELATION ||                                                  \
 	  ((chunk)->relkind == RELKIND_FOREIGN_TABLE && (chunk)->data_nodes != NIL)))
 
 #define ASSERT_IS_VALID_CHUNK(chunk) Assert(IS_VALID_CHUNK(chunk))

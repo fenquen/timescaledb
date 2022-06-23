@@ -9,7 +9,17 @@ SELECT pg_backend_pid();
     GRANT USAGE ON SCHEMA pg_catalog TO PUBLIC;
 
 
+FormData打头的struct本质表对应的对象和java相同
 
+cmp_coordinate_and_slice 用在了btree搜索中 确定某个值是不是在维度之中
+
+EXPLAIN  INSERT INTO aiot("time", "value") VALUES (NOW(), 'a');
+                                 QUERY PLAN
+-----------------------------------------------------------------------------
+ Custom Scan (HypertableModify)  (cost=0.00..0.01 rows=1 width=524)
+   ->  Insert on aiot  (cost=0.00..0.01 rows=1 width=524)
+         ->  Custom Scan (ChunkDispatch)  (cost=0.00..0.01 rows=1 width=524)
+               ->  Result  (cost=0.00..0.01 rows=1 width=524)
 
 用来篡改默认行为的函数集合
 

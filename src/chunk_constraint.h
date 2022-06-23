@@ -12,13 +12,11 @@
 #include "ts_catalog/catalog.h"
 #include "hypertable.h"
 
-typedef struct ChunkConstraint
-{
+typedef struct ChunkConstraint {
 	FormData_chunk_constraint fd;
 } ChunkConstraint;
 
-typedef struct ChunkConstraints
-{
+typedef struct ChunkConstraints {
 	MemoryContext mctx;
 	int16 capacity;
 	int16 num_constraints;

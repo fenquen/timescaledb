@@ -14,7 +14,7 @@ AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
-# AlwaysBreakAfterDefinitionReturnType: None # option is deprecated
+AlwaysBreakAfterDefinitionReturnType: None # option is deprecated
 # 函数总是在返回的类型之后换1行
 AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false

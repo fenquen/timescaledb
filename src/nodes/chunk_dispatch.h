@@ -19,11 +19,9 @@
 
 /*
  * ChunkDispatch keeps cached state needed to dispatch tuples to chunks. It is
- * separate from any plan and executor nodes, since it is used both for INSERT
- * and COPY.
+ * separate from any plan and executor nodes, since it is used both for INSERT and COPY.
  */
-typedef struct ChunkDispatch
-{
+typedef struct ChunkDispatch {
 	/* Link to the executor state for INSERTs. This is not set for COPY path. */
 	const struct ChunkDispatchState *dispatch_state;
 	Hypertable *hypertable;
@@ -31,10 +29,8 @@ typedef struct ChunkDispatch
 	EState *estate;
 	int eflags;
 
-	/*
-	 * Keep a pointer to the original (hypertable's) ResultRelInfo since we
-	 * will reset the pointer in EState as we lookup new chunks.
-	 */
+	// Keep a pointer to the original (hypertable's) ResultRelInfo
+	// since we will reset the pointer in EState as we look up new chunks. 来自 estate->es_result_relation_info;
 	ResultRelInfo *hypertable_result_rel_info;
 	ChunkInsertState *prev_cis;
 	Oid prev_cis_oid;
@@ -52,7 +48,7 @@ ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch *chunkDispatch, Point *p,
 extern bool ts_chunk_dispatch_has_returning(const ChunkDispatch *dispatch);
 extern List *ts_chunk_dispatch_get_returning_clauses(const ChunkDispatch *dispatch);
 extern List *ts_chunk_dispatch_get_arbiter_indexes(const ChunkDispatch *dispatch);
-extern OnConflictAction ts_chunk_dispatch_get_on_conflict_action(const ChunkDispatch *dispatch);
+extern OnConflictAction ts_chunk_dispatch_get_on_conflict_action(const ChunkDispatch *chunkDispatch);
 extern List *ts_chunk_dispatch_get_on_conflict_set(const ChunkDispatch *dispatch);
 extern CmdType ts_chunk_dispatch_get_cmd_type(const ChunkDispatch *dispatch);
 

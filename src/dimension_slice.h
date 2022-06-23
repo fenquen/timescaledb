@@ -26,14 +26,13 @@
 #define VALUE_CMP(v1, v2) VALUE_GT(v1, v2) - VALUE_LT(v1, v2)
 
 /* Compare the range start values of two slices */
-#define DIMENSION_SLICE_RANGE_START_CMP(s1, s2)                                                    \
+#define DIMENSION_SLICE_RANGE_START_CMP(s1, s2) \
 	VALUE_CMP((s1)->fd.range_start, (s2)->fd.range_start)
 
 /* Compare the range end values of two slices */
 #define DIMENSION_SLICE_RANGE_END_CMP(s1, s2) VALUE_CMP((s1)->fd.range_end, (s2)->fd.range_end)
 
-typedef struct DimensionSlice
-{
+typedef struct DimensionSlice {
 	FormData_dimension_slice fd;
 	void (*storage_free)(void *);
 	void *storage;
@@ -98,10 +97,10 @@ extern int ts_dimension_slice_scan_iterator_set_range(ScanIterator *it, int32 di
 
 #define dimension_slice_insert(slice) ts_dimension_slice_insert_multi(&(slice), 1)
 
-#define dimension_slice_scan(dimension_id, coordinate, tuplock)                                    \
+#define dimension_slice_scan(dimension_id, coordinate, tuplock) \
 	ts_dimension_slice_scan_limit(dimension_id, coordinate, 0, tuplock)
 
-#define dimension_slice_collision_scan(dimension_id, range_start, range_end)                       \
+#define dimension_slice_collision_scan(dimension_id, range_start, range_end) \
 	ts_dimension_slice_collision_scan_limit(dimension_id, range_start, range_end, 0)
 
 #endif /* TIMESCALEDB_DIMENSION_SLICE_H */

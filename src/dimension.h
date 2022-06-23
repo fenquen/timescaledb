@@ -58,7 +58,7 @@ typedef struct Hyperspace {
  * A point in an N-dimensional hyperspace.
  */
 typedef struct Point {
-	int16 cardinality;
+	int16 cardinality; // 基数
 	uint8 num_coords;
 	/* Open dimension coordinates are stored before the closed coordinates */
 	int64 coordinates[FLEXIBLE_ARRAY_MEMBER];

@@ -28,18 +28,16 @@
 
 /* Put DIMENSION_SLICE_MAXVALUE point in same slice as DIMENSION_SLICE_MAXVALUE-1, always */
 /* This avoids the problem with coord < range_end where coord and range_end is an int64 */
-#define REMAP_LAST_COORDINATE(coord)                                                               \
+#define REMAP_LAST_COORDINATE(coord) \
 	(((coord) == DIMENSION_SLICE_MAXVALUE) ? DIMENSION_SLICE_MAXVALUE - 1 : (coord))
 
 static inline DimensionSlice *
-dimension_slice_alloc(void)
-{
+dimension_slice_alloc(void) {
 	return palloc0(sizeof(DimensionSlice));
 }
 
 static inline DimensionSlice *
-dimension_slice_from_form_data(const Form_dimension_slice fd)
-{
+dimension_slice_from_form_data(const Form_dimension_slice fd) {
 	DimensionSlice *slice = dimension_slice_alloc();
 
 	memcpy(&slice->fd, fd, sizeof(FormData_dimension_slice));
@@ -49,8 +47,7 @@ dimension_slice_from_form_data(const Form_dimension_slice fd)
 }
 
 static inline DimensionSlice *
-dimension_slice_from_slot(TupleTableSlot *slot)
-{
+dimension_slice_from_slot(TupleTableSlot *slot) {
 	bool should_free;
 	HeapTuple tuple = ExecFetchSlotHeapTuple(slot, false, &should_free);
 	DimensionSlice *slice;
@@ -64,8 +61,7 @@ dimension_slice_from_slot(TupleTableSlot *slot)
 }
 
 DimensionSlice *
-ts_dimension_slice_create(int dimension_id, int64 range_start, int64 range_end)
-{
+ts_dimension_slice_create(int dimension_id, int64 range_start, int64 range_end) {
 	DimensionSlice *slice = dimension_slice_alloc();
 
 	slice->fd.dimension_id = dimension_id;
@@ -75,9 +71,7 @@ ts_dimension_slice_create(int dimension_id, int64 range_start, int64 range_end)
 	return slice;
 }
 
-int
-ts_dimension_slice_cmp(const DimensionSlice *left, const DimensionSlice *right)
-{
+int ts_dimension_slice_cmp(const DimensionSlice *left, const DimensionSlice *right) {
 	int res = DIMENSION_SLICE_RANGE_START_CMP(left, right);
 
 	if (res == 0)
@@ -86,9 +80,7 @@ ts_dimension_slice_cmp(const DimensionSlice *left, const DimensionSlice *right)
 	return res;
 }
 
-int
-ts_dimension_slice_cmp_coordinate(const DimensionSlice *slice, int64 coord)
-{
+int ts_dimension_slice_cmp_coordinate(const DimensionSlice *slice, int64 coord) {
 	coord = REMAP_LAST_COORDINATE(coord);
 	if (coord < slice->fd.range_start)
 		return -1;
@@ -100,8 +92,7 @@ ts_dimension_slice_cmp_coordinate(const DimensionSlice *slice, int64 coord)
 }
 
 static bool
-tuple_is_deleted(TupleInfo *ti)
-{
+tuple_is_deleted(TupleInfo *ti) {
 #ifdef USE_ASSERT_CHECKING
 	if (ti->lockresult == TM_Deleted)
 		Assert(ItemPointerEquals(ts_scanner_get_tuple_tid(ti), &ti->lockfd.ctid));
@@ -110,10 +101,8 @@ tuple_is_deleted(TupleInfo *ti)
 }
 
 static void
-lock_result_ok_or_abort(TupleInfo *ti)
-{
-	switch (ti->lockresult)
-	{
+lock_result_ok_or_abort(TupleInfo *ti) {
+	switch (ti->lockresult) {
 		/* Updating a tuple in the same transaction before taking a lock is OK
 		 * even though it is not expected in this case */
 		case TM_SelfModified:
@@ -149,14 +138,12 @@ lock_result_ok_or_abort(TupleInfo *ti)
 }
 
 static ScanTupleResult
-dimension_vec_tuple_found(TupleInfo *ti, void *data)
-{
+dimension_vec_tuple_found(TupleInfo *ti, void *data) {
 	DimensionVec **slices = data;
 	DimensionSlice *slice;
 	MemoryContext old;
 
-	switch (ti->lockresult)
-	{
+	switch (ti->lockresult) {
 		case TM_SelfModified:
 		case TM_Ok:
 			break;
@@ -183,8 +170,7 @@ static int
 dimension_slice_scan_limit_direction_internal(int indexid, ScanKeyData *scankey, int nkeys,
 											  tuple_found_func on_tuple_found, void *scandata,
 											  int limit, ScanDirection scandir, LOCKMODE lockmode,
-											  const ScanTupLock *tuplock, MemoryContext mctx)
-{
+											  const ScanTupLock *tuplock, MemoryContext mctx) {
 	Catalog *catalog = ts_catalog_get();
 	ScannerCtx scanctx = {
 		.table = catalog_get_table_id(catalog, DIMENSION_SLICE),
@@ -207,8 +193,7 @@ static int
 dimension_slice_scan_limit_internal(int indexid, ScanKeyData *scankey, int nkeys,
 									tuple_found_func on_tuple_found, void *scandata, int limit,
 									LOCKMODE lockmode, const ScanTupLock *tuplock,
-									MemoryContext mctx)
-{
+									MemoryContext mctx) {
 	return dimension_slice_scan_limit_direction_internal(indexid,
 														 scankey,
 														 nkeys,
@@ -228,8 +213,7 @@ dimension_slice_scan_limit_internal(int indexid, ScanKeyData *scankey, int nkeys
  */
 DimensionVec *
 ts_dimension_slice_scan_limit(int32 dimension_id, int64 coordinate, int limit,
-							  const ScanTupLock *tuplock)
-{
+							  const ScanTupLock *tuplock) {
 	ScanKeyData scankey[3];
 	DimensionVec *slices = ts_dimension_vec_create(limit > 0 ? limit : DIMENSION_VEC_DEFAULT_SIZE);
 
@@ -268,11 +252,9 @@ ts_dimension_slice_scan_limit(int32 dimension_id, int64 coordinate, int limit,
 	return ts_dimension_vec_sort(&slices);
 }
 
-int
-ts_dimension_slice_scan_iterator_set_range(ScanIterator *it, int32 dimension_id,
-										   StrategyNumber start_strategy, int64 start_value,
-										   StrategyNumber end_strategy, int64 end_value)
-{
+int ts_dimension_slice_scan_iterator_set_range(ScanIterator *it, int32 dimension_id,
+											   StrategyNumber start_strategy, int64 start_value,
+											   StrategyNumber end_strategy, int64 end_value) {
 	Catalog *catalog = ts_catalog_get();
 
 	it->ctx.index = catalog_get_index(catalog,
@@ -290,8 +272,7 @@ ts_dimension_slice_scan_iterator_set_range(ScanIterator *it, int32 dimension_id,
 	 * Perform an index scan for slices matching the dimension's ID and which
 	 * enclose the coordinate.
 	 */
-	if (start_strategy != InvalidStrategy)
-	{
+	if (start_strategy != InvalidStrategy) {
 		Oid opno = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT8OID, INT8OID, start_strategy);
 		Oid proc = get_opcode(opno);
 
@@ -304,8 +285,7 @@ ts_dimension_slice_scan_iterator_set_range(ScanIterator *it, int32 dimension_id,
 			proc,
 			Int64GetDatum(start_value));
 	}
-	if (end_strategy != InvalidStrategy)
-	{
+	if (end_strategy != InvalidStrategy) {
 		Oid opno = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT8OID, INT8OID, end_strategy);
 		Oid proc = get_opcode(opno);
 
@@ -315,8 +295,7 @@ ts_dimension_slice_scan_iterator_set_range(ScanIterator *it, int32 dimension_id,
 		 * range_end is stored as exclusive, so add 1 to the value being
 		 * searched. Also avoid overflow
 		 */
-		if (end_value != PG_INT64_MAX)
-		{
+		if (end_value != PG_INT64_MAX) {
 			end_value++;
 
 			/*
@@ -324,9 +303,7 @@ ts_dimension_slice_scan_iterator_set_range(ScanIterator *it, int32 dimension_id,
 			 * value back to INT64_MAX-1
 			 */
 			end_value = REMAP_LAST_COORDINATE(end_value);
-		}
-		else
-		{
+		} else {
 			/*
 			 * The point with INT64_MAX gets mapped to INT64_MAX-1 so
 			 * incrementing that gets you to INT_64MAX
@@ -353,8 +330,7 @@ ts_dimension_slice_scan_iterator_set_range(ScanIterator *it, int32 dimension_id,
 DimensionVec *
 ts_dimension_slice_scan_range_limit(int32 dimension_id, StrategyNumber start_strategy,
 									int64 start_value, StrategyNumber end_strategy, int64 end_value,
-									int limit, const ScanTupLock *tuplock)
-{
+									int limit, const ScanTupLock *tuplock) {
 	DimensionVec *slices = ts_dimension_vec_create(limit > 0 ? limit : DIMENSION_VEC_DEFAULT_SIZE);
 	ScanIterator it = ts_dimension_slice_scan_iterator_create(tuplock, CurrentMemoryContext);
 
@@ -366,14 +342,12 @@ ts_dimension_slice_scan_range_limit(int32 dimension_id, StrategyNumber start_str
 											   end_value);
 	it.ctx.limit = limit;
 
-	ts_scanner_foreach(&it)
-	{
+	ts_scanner_foreach(&it) {
 		const TupleInfo *ti = ts_scan_iterator_tuple_info(&it);
 		DimensionSlice *slice;
 		MemoryContext old;
 
-		switch (ti->lockresult)
-		{
+		switch (ti->lockresult) {
 			case TM_SelfModified:
 			case TM_Ok:
 				old = MemoryContextSwitchTo(ti->mctx);
@@ -406,8 +380,7 @@ ts_dimension_slice_scan_range_limit(int32 dimension_id, StrategyNumber start_str
  */
 DimensionVec *
 ts_dimension_slice_collision_scan_limit(int32 dimension_id, int64 range_start, int64 range_end,
-										int limit)
-{
+										int limit) {
 	ScanKeyData scankey[3];
 	DimensionVec *slices = ts_dimension_vec_create(limit > 0 ? limit : DIMENSION_VEC_DEFAULT_SIZE);
 
@@ -441,8 +414,7 @@ ts_dimension_slice_collision_scan_limit(int32 dimension_id, int64 range_start, i
 }
 
 DimensionVec *
-ts_dimension_slice_scan_by_dimension(int32 dimension_id, int limit)
-{
+ts_dimension_slice_scan_by_dimension(int32 dimension_id, int limit) {
 	ScanKeyData scankey[1];
 	DimensionVec *slices = ts_dimension_vec_create(limit > 0 ? limit : DIMENSION_VEC_DEFAULT_SIZE);
 
@@ -473,8 +445,7 @@ ts_dimension_slice_scan_by_dimension(int32 dimension_id, int limit)
  */
 DimensionVec *
 ts_dimension_slice_scan_by_dimension_before_point(int32 dimension_id, int64 point, int limit,
-												  ScanDirection scandir, MemoryContext mctx)
-{
+												  ScanDirection scandir, MemoryContext mctx) {
 	ScanKeyData scankey[3];
 	DimensionVec *slices = ts_dimension_vec_create(limit > 0 ? limit : DIMENSION_VEC_DEFAULT_SIZE);
 
@@ -510,8 +481,7 @@ ts_dimension_slice_scan_by_dimension_before_point(int32 dimension_id, int64 poin
 }
 
 static ScanTupleResult
-dimension_slice_tuple_delete(TupleInfo *ti, void *data)
-{
+dimension_slice_tuple_delete(TupleInfo *ti, void *data) {
 	bool isnull;
 	Datum dimension_slice_id = slot_getattr(ti->slot, Anum_dimension_slice_id, &isnull);
 	bool *delete_constraints = data;
@@ -530,9 +500,7 @@ dimension_slice_tuple_delete(TupleInfo *ti, void *data)
 	return SCAN_CONTINUE;
 }
 
-int
-ts_dimension_slice_delete_by_dimension_id(int32 dimension_id, bool delete_constraints)
-{
+int ts_dimension_slice_delete_by_dimension_id(int32 dimension_id, bool delete_constraints) {
 	ScanKeyData scankey[1];
 
 	ScanKeyInit(&scankey[0],
@@ -553,9 +521,7 @@ ts_dimension_slice_delete_by_dimension_id(int32 dimension_id, bool delete_constr
 		CurrentMemoryContext);
 }
 
-int
-ts_dimension_slice_delete_by_id(int32 dimension_slice_id, bool delete_constraints)
-{
+int ts_dimension_slice_delete_by_id(int32 dimension_slice_id, bool delete_constraints) {
 	ScanKeyData scankey[1];
 
 	ScanKeyInit(&scankey[0],
@@ -576,13 +542,10 @@ ts_dimension_slice_delete_by_id(int32 dimension_slice_id, bool delete_constraint
 }
 
 static ScanTupleResult
-dimension_slice_fill(TupleInfo *ti, void *data)
-{
-	switch (ti->lockresult)
-	{
+dimension_slice_fill(TupleInfo *ti, void *data) {
+	switch (ti->lockresult) {
 		case TM_SelfModified:
-		case TM_Ok:
-		{
+		case TM_Ok: {
 			DimensionSlice **slice = data;
 			bool should_free;
 			HeapTuple tuple = ts_scanner_fetch_heap_tuple(ti, false, &should_free);
@@ -614,9 +577,7 @@ dimension_slice_fill(TupleInfo *ti, void *data)
  * Returns true if the dimension slice was found (and locked), false
  * otherwise.
  */
-bool
-ts_dimension_slice_scan_for_existing(const DimensionSlice *slice, const ScanTupLock *tuplock)
-{
+bool ts_dimension_slice_scan_for_existing(const DimensionSlice *slice, const ScanTupLock *tuplock) {
 	ScanKeyData scankey[3];
 
 	ScanKeyInit(&scankey[0],
@@ -648,8 +609,7 @@ ts_dimension_slice_scan_for_existing(const DimensionSlice *slice, const ScanTupL
 }
 
 DimensionSlice *
-ts_dimension_slice_from_tuple(TupleInfo *ti)
-{
+ts_dimension_slice_from_tuple(TupleInfo *ti) {
 	DimensionSlice *slice;
 	MemoryContext old;
 
@@ -662,8 +622,7 @@ ts_dimension_slice_from_tuple(TupleInfo *ti)
 }
 
 static ScanTupleResult
-dimension_slice_tuple_found(TupleInfo *ti, void *data)
-{
+dimension_slice_tuple_found(TupleInfo *ti, void *data) {
 	DimensionSlice **slice = data;
 	*slice = ts_dimension_slice_from_tuple(ti);
 	return SCAN_DONE;
@@ -676,8 +635,7 @@ dimension_slice_tuple_found(TupleInfo *ti, void *data)
  * it to not change nor disappear. */
 DimensionSlice *
 ts_dimension_slice_scan_by_id_and_lock(int32 dimension_slice_id, const ScanTupLock *tuplock,
-									   MemoryContext mctx)
-{
+									   MemoryContext mctx) {
 	DimensionSlice *slice = NULL;
 	ScanKeyData scankey[1];
 
@@ -701,8 +659,7 @@ ts_dimension_slice_scan_by_id_and_lock(int32 dimension_slice_id, const ScanTupLo
 }
 
 ScanIterator
-ts_dimension_slice_scan_iterator_create(const ScanTupLock *tuplock, MemoryContext result_mcxt)
-{
+ts_dimension_slice_scan_iterator_create(const ScanTupLock *tuplock, MemoryContext result_mcxt) {
 	ScanIterator it = ts_scan_iterator_create(DIMENSION_SLICE, AccessShareLock, result_mcxt);
 	it.ctx.flags |= SCANNER_F_NOEND_AND_NOCLOSE;
 	it.ctx.tuplock = tuplock;
@@ -710,10 +667,8 @@ ts_dimension_slice_scan_iterator_create(const ScanTupLock *tuplock, MemoryContex
 	return it;
 }
 
-void
-ts_dimension_slice_scan_iterator_set_slice_id(ScanIterator *it, int32 slice_id,
-											  const ScanTupLock *tuplock)
-{
+void ts_dimension_slice_scan_iterator_set_slice_id(ScanIterator *it, int32 slice_id,
+												   const ScanTupLock *tuplock) {
 	it->ctx.index = catalog_get_index(ts_catalog_get(), DIMENSION_SLICE, DIMENSION_SLICE_ID_IDX);
 	ts_scan_iterator_scan_key_reset(it);
 	ts_scan_iterator_scan_key_init(it,
@@ -726,8 +681,7 @@ ts_dimension_slice_scan_iterator_set_slice_id(ScanIterator *it, int32 slice_id,
 
 DimensionSlice *
 ts_dimension_slice_scan_iterator_get_by_id(ScanIterator *it, int32 slice_id,
-										   const ScanTupLock *tuplock)
-{
+										   const ScanTupLock *tuplock) {
 	TupleInfo *ti;
 
 	ts_dimension_slice_scan_iterator_set_slice_id(it, slice_id, tuplock);
@@ -739,8 +693,7 @@ ts_dimension_slice_scan_iterator_get_by_id(ScanIterator *it, int32 slice_id,
 }
 
 DimensionSlice *
-ts_dimension_slice_copy(const DimensionSlice *original)
-{
+ts_dimension_slice_copy(const DimensionSlice *original) {
 	DimensionSlice *new = palloc(sizeof(DimensionSlice));
 
 	Assert(original->storage == NULL);
@@ -756,9 +709,7 @@ ts_dimension_slice_copy(const DimensionSlice *original)
  *
  * Returns true if the slices collide, otherwise false.
  */
-bool
-ts_dimension_slices_collide(const DimensionSlice *slice1, const DimensionSlice *slice2)
-{
+bool ts_dimension_slices_collide(const DimensionSlice *slice1, const DimensionSlice *slice2) {
 	Assert(slice1->fd.dimension_id == slice2->fd.dimension_id);
 
 	return (slice1->fd.range_start < slice2->fd.range_end &&
@@ -773,9 +724,7 @@ ts_dimension_slices_collide(const DimensionSlice *slice1, const DimensionSlice *
  *
  * Returns true if the slices have identical ranges, otherwise false.
  */
-bool
-ts_dimension_slices_equal(const DimensionSlice *slice1, const DimensionSlice *slice2)
-{
+bool ts_dimension_slices_equal(const DimensionSlice *slice1, const DimensionSlice *slice2) {
 	Assert(slice1->fd.dimension_id == slice2->fd.dimension_id);
 
 	return slice1->fd.range_start == slice2->fd.range_start &&
@@ -798,22 +747,17 @@ ts_dimension_slices_equal(const DimensionSlice *slice1, const DimensionSlice *sl
  *
  * Returns true if the slice was cut, otherwise false.
  */
-bool
-ts_dimension_slice_cut(DimensionSlice *to_cut, const DimensionSlice *other, int64 coord)
-{
+bool ts_dimension_slice_cut(DimensionSlice *to_cut, const DimensionSlice *other, int64 coord) {
 	Assert(to_cut->fd.dimension_id == other->fd.dimension_id);
 
 	coord = REMAP_LAST_COORDINATE(coord);
 
-	if (other->fd.range_end <= coord && other->fd.range_end > to_cut->fd.range_start)
-	{
+	if (other->fd.range_end <= coord && other->fd.range_end > to_cut->fd.range_start) {
 		/* Cut "before" the coordinate */
 		to_cut->fd.range_start = other->fd.range_end;
 
 		return true;
-	}
-	else if (other->fd.range_start > coord && other->fd.range_start < to_cut->fd.range_end)
-	{
+	} else if (other->fd.range_start > coord && other->fd.range_start < to_cut->fd.range_end) {
 		/* Cut "after" the coordinate */
 		to_cut->fd.range_end = other->fd.range_start;
 
@@ -823,17 +767,14 @@ ts_dimension_slice_cut(DimensionSlice *to_cut, const DimensionSlice *other, int6
 	return false;
 }
 
-void
-ts_dimension_slice_free(DimensionSlice *slice)
-{
+void ts_dimension_slice_free(DimensionSlice *slice) {
 	if (slice->storage_free != NULL)
 		slice->storage_free(slice->storage);
 	pfree(slice);
 }
 
 static bool
-dimension_slice_insert_relation(const Relation rel, DimensionSlice *slice)
-{
+dimension_slice_insert_relation(const Relation rel, DimensionSlice *slice) {
 	TupleDesc desc = RelationGetDescr(rel);
 	Datum values[Natts_dimension_slice];
 	bool nulls[Natts_dimension_slice] = { false };
@@ -871,19 +812,15 @@ dimension_slice_insert_relation(const Relation rel, DimensionSlice *slice)
  *
  * Returns the number of slices inserted.
  */
-int
-ts_dimension_slice_insert_multi(DimensionSlice **slices, Size num_slices)
-{
+int ts_dimension_slice_insert_multi(DimensionSlice **slices, Size num_slices) {
 	Catalog *catalog = ts_catalog_get();
 	Relation rel;
 	Size i, n = 0;
 
 	rel = table_open(catalog_get_table_id(catalog, DIMENSION_SLICE), RowExclusiveLock);
 
-	for (i = 0; i < num_slices; i++)
-	{
-		if (slices[i]->fd.id == 0)
-		{
+	for (i = 0; i < num_slices; i++) {
+		if (slices[i]->fd.id == 0) {
 			dimension_slice_insert_relation(rel, slices[i]);
 			n++;
 		}
@@ -895,8 +832,7 @@ ts_dimension_slice_insert_multi(DimensionSlice **slices, Size num_slices)
 }
 
 static ScanTupleResult
-dimension_slice_nth_tuple_found(TupleInfo *ti, void *data)
-{
+dimension_slice_nth_tuple_found(TupleInfo *ti, void *data) {
 	DimensionSlice **slice = data;
 	MemoryContext old = MemoryContextSwitchTo(ti->mctx);
 
@@ -906,8 +842,7 @@ dimension_slice_nth_tuple_found(TupleInfo *ti, void *data)
 }
 
 DimensionSlice *
-ts_dimension_slice_nth_latest_slice(int32 dimension_id, int n)
-{
+ts_dimension_slice_nth_latest_slice(int32 dimension_id, int n) {
 	ScanKeyData scankey[1];
 	int num_tuples;
 	DimensionSlice *ret = NULL;
@@ -935,11 +870,9 @@ ts_dimension_slice_nth_latest_slice(int32 dimension_id, int n)
 	return ret;
 }
 
-int32
-ts_dimension_slice_oldest_valid_chunk_for_reorder(int32 job_id, int32 dimension_id,
-												  StrategyNumber start_strategy, int64 start_value,
-												  StrategyNumber end_strategy, int64 end_value)
-{
+int32 ts_dimension_slice_oldest_valid_chunk_for_reorder(int32 job_id, int32 dimension_id,
+														StrategyNumber start_strategy, int64 start_value,
+														StrategyNumber end_strategy, int64 end_value) {
 	int32 result_chunk_id = -1;
 	ScanIterator it = ts_dimension_slice_scan_iterator_create(NULL, CurrentMemoryContext);
 	bool done = false;
@@ -952,8 +885,7 @@ ts_dimension_slice_oldest_valid_chunk_for_reorder(int32 job_id, int32 dimension_
 											   end_value);
 	ts_scan_iterator_start_scan(&it);
 
-	while (!done)
-	{
+	while (!done) {
 		const TupleInfo *ti = ts_scan_iterator_next(&it);
 		ListCell *lc;
 		DimensionSlice *slice;
@@ -967,16 +899,14 @@ ts_dimension_slice_oldest_valid_chunk_for_reorder(int32 job_id, int32 dimension_
 															&chunk_ids,
 															CurrentMemoryContext);
 
-		foreach (lc, chunk_ids)
-		{
+		foreach (lc, chunk_ids) {
 			/* Look for a chunk that a) doesn't have a job stat (reorder ) and b) is not compressed
 			 * (should not reorder a compressed chunk) */
 			int32 chunk_id = lfirst_int(lc);
 			BgwPolicyChunkStats *chunk_stat = ts_bgw_policy_chunk_stats_find(job_id, chunk_id);
 
 			if ((chunk_stat == NULL || chunk_stat->fd.num_times_job_run == 0) &&
-				ts_chunk_get_compression_status(chunk_id) == CHUNK_COMPRESS_NONE)
-			{
+				ts_chunk_get_compression_status(chunk_id) == CHUNK_COMPRESS_NONE) {
 				/* Save the chunk_id */
 				result_chunk_id = chunk_id;
 				done = true;
@@ -994,8 +924,7 @@ List *
 ts_dimension_slice_get_chunkids_to_compress(int32 dimension_id, StrategyNumber start_strategy,
 											int64 start_value, StrategyNumber end_strategy,
 											int64 end_value, bool compress, bool recompress,
-											int32 numchunks)
-{
+											int32 numchunks) {
 	List *chunk_ids = NIL;
 	int32 maxchunks = numchunks > 0 ? numchunks : -1;
 	ScanIterator it = ts_dimension_slice_scan_iterator_create(NULL, CurrentMemoryContext);
@@ -1009,8 +938,7 @@ ts_dimension_slice_get_chunkids_to_compress(int32 dimension_id, StrategyNumber s
 											   end_value);
 	ts_scan_iterator_start_scan(&it);
 
-	while (!done)
-	{
+	while (!done) {
 		DimensionSlice *slice;
 		TupleInfo *ti;
 		ListCell *lc;
@@ -1025,21 +953,18 @@ ts_dimension_slice_get_chunkids_to_compress(int32 dimension_id, StrategyNumber s
 		ts_chunk_constraint_scan_by_dimension_slice_to_list(slice,
 															&slice_chunk_ids,
 															CurrentMemoryContext);
-		foreach (lc, slice_chunk_ids)
-		{
+		foreach (lc, slice_chunk_ids) {
 			int32 chunk_id = lfirst_int(lc);
 			ChunkCompressionStatus st = ts_chunk_get_compression_status(chunk_id);
 
 			if ((compress && st == CHUNK_COMPRESS_NONE) ||
-				(recompress && st == CHUNK_COMPRESS_UNORDERED))
-			{
+				(recompress && st == CHUNK_COMPRESS_UNORDERED)) {
 				/* found a chunk that is not compressed or needs recompress
 				 * caller needs to check the correct chunk status
 				 */
 				chunk_ids = lappend_int(chunk_ids, chunk_id);
 
-				if (maxchunks > 0 && list_length(chunk_ids) >= maxchunks)
-				{
+				if (maxchunks > 0 && list_length(chunk_ids) >= maxchunks) {
 					done = true;
 					break;
 				}

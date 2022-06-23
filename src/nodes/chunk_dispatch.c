@@ -66,11 +66,12 @@ ts_chunk_dispatch_get_arbiter_indexes(const ChunkDispatch *dispatch) {
 	return dispatch->dispatch_state->arbiter_indexes;
 }
 
-OnConflictAction
-ts_chunk_dispatch_get_on_conflict_action(const ChunkDispatch *dispatch) {
-	if (!dispatch->dispatch_state)
+OnConflictAction ts_chunk_dispatch_get_on_conflict_action(const ChunkDispatch *chunkDispatch) {
+	if (!chunkDispatch->dispatch_state) {
 		return ONCONFLICT_NONE;
-	return get_modifytable(dispatch)->onConflictAction;
+	}
+
+	return get_modifytable(chunkDispatch)->onConflictAction;
 }
 
 List *
@@ -78,8 +79,7 @@ ts_chunk_dispatch_get_on_conflict_set(const ChunkDispatch *dispatch) {
 	return get_modifytable(dispatch)->onConflictSet;
 }
 
-CmdType
-ts_chunk_dispatch_get_cmd_type(const ChunkDispatch *dispatch) {
+CmdType ts_chunk_dispatch_get_cmd_type(const ChunkDispatch *dispatch) {
 	return dispatch->dispatch_state == NULL ? CMD_INSERT :
 											  dispatch->dispatch_state->mtstate->operation;
 }
@@ -88,9 +88,8 @@ void ts_chunk_dispatch_destroy(ChunkDispatch *cd) {
 	ts_subspace_store_free(cd->cache);
 }
 
-static void
-destroy_chunk_insert_state(void *cis) {
-	ts_chunk_insert_state_destroy((ChunkInsertState *) cis);
+static void destroy_chunk_insert_state(void *chunkDispatch) {
+	ts_chunk_insert_state_destroy((ChunkInsertState *) chunkDispatch);
 }
 
 // Get the chunk insert state for the chunk that matches the given point in the partitioned hyperspace.
@@ -109,17 +108,30 @@ extern ChunkInsertState *ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch 
 		elog(ERROR, "direct insert into internal compressed hypertable is not supported");
 	}
 
+
+
+
+	// 试图得到对应的chunkInsertState
 	ChunkInsertState *chunkInsertState = ts_subspace_store_get(chunkDispatch->cache, point);
 
+	// 没有对应的
 	if (NULL == chunkInsertState) {
+		// 试图来get or create
 		Chunk *newChunk = ts_hypertable_get_or_create_chunk(chunkDispatch->hypertable, point);
 
 		if (NULL == newChunk) {
 			elog(ERROR, "no chunk found or created");
 		}
 
+		// 纯新的创建
 		chunkInsertState = ts_chunk_insert_state_create(newChunk, chunkDispatch);
-		ts_subspace_store_add(chunkDispatch->cache, newChunk->cube, chunkInsertState, destroy_chunk_insert_state);
+
+
+		// 把这个新生成的添加到对应的链路的尾部
+		ts_subspace_store_add(chunkDispatch->cache,
+							  newChunk->cube,
+							  chunkInsertState,
+							  destroy_chunk_insert_state);
 	} else if (chunkInsertState->rel->rd_id == chunkDispatch->prev_cis_oid && chunkInsertState == chunkDispatch->prev_cis) {
 		/* got the same item from cache as before */
 		chunkInsertStateChanged = false;

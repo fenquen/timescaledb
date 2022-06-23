@@ -11,13 +11,12 @@
 #include "dimension_slice.h"
 
 /*
- *	DimensionVec is a collection of slices (ranges) along one dimension for a
- *	time range.
+ *  它是汇集了某个dimension麾下的全部的slice 名字有欺骗性不是汇集了多个dimension
+ *	DimensionVec is a collection of slices (ranges) along one dimension for a time range.
  */
 typedef struct DimensionVec {
 	int32 capacity;	  /* The capacity of the slices array */
-	int32 num_slices; /* The current number of slices in slices
-					   * array */
+	int32 num_slices; /* The current number of slices in slices array */
 	DimensionSlice *slices[FLEXIBLE_ARRAY_MEMBER];
 } DimensionVec;
 
@@ -34,7 +33,7 @@ extern DimensionVec *ts_dimension_vec_add_slice(DimensionVec **vecptr, Dimension
 extern DimensionVec *ts_dimension_vec_add_unique_slice(DimensionVec **vecptr,
 													   DimensionSlice *slice);
 extern void ts_dimension_vec_remove_slice(DimensionVec **vecptr, int32 index);
-extern DimensionSlice *ts_dimension_vec_find_slice(const DimensionVec *vec, int64 coordinate);
+extern DimensionSlice *ts_dimension_vec_find_slice(const DimensionVec *dimensionVec, int64 value);
 extern int ts_dimension_vec_find_slice_index(const DimensionVec *vec, int32 dimension_slice_id);
 extern const DimensionSlice *ts_dimension_vec_get(const DimensionVec *vec, int32 index);
 extern void ts_dimension_vec_free(DimensionVec *vec);

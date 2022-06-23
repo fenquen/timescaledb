@@ -33,7 +33,7 @@ typedef struct CompressChunkInsertState {
 typedef struct TSCopyMultiInsertBuffer TSCopyMultiInsertBuffer;
 
 typedef struct ChunkInsertState {
-	Relation rel;
+	Relation rel; // 对应的chunk的表
 	ResultRelInfo *result_relation_info;
 
 	/* Per-chunk arbiter indexes for ON CONFLICT handling */
@@ -69,7 +69,7 @@ typedef struct ChunkInsertState {
 	MemoryContext mctx;
 	EState *estate;
 	List *chunk_data_nodes; /* List of data nodes for the chunk (ChunkDataNode objects) */
-	int32 chunk_id;
+	int32 chunk_id; // _timescaledb_catalog_.chunk的表对应的id
 	Oid user_id;
 
 	/* for tracking compressed chunks */
