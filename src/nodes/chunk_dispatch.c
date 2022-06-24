@@ -96,7 +96,7 @@ static void destroy_chunk_insert_state(void *chunkDispatch) {
 extern ChunkInsertState *ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch *chunkDispatch,
 																  Point *point,
 																  const on_chunk_changed_func on_chunk_changed,
-																  void *data) {
+																  void *data) {// chunkDispatchState
 	bool chunkInsertStateChanged = true;
 
 	/* Direct inserts into internal compressed hypertable is not supported.

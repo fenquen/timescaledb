@@ -18,7 +18,7 @@ typedef struct ChunkDispatchState {
 	CustomScanState cscan_state;
 	Plan *subplan;
 	Cache *hypertable_cache;
-	Oid hypertable_relid;
+	Oid hypertable_relid; // 本尊
 	List *arbiter_indexes;
 	/*
 	 * Keep a pointer to the parent ModifyTableState executor node since we need

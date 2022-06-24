@@ -23,21 +23,22 @@
 #include "dimension.h"
 #include "hypertable.h"
 
-static void
-chunk_dispatch_begin(CustomScanState *node, EState *estate, int eflags) {
-	ChunkDispatchState *state = (ChunkDispatchState *) node;
-	Hypertable *ht;
-	Cache *hypertable_cache;
-	PlanState *ps;
+static void chunk_dispatch_begin(CustomScanState *customScanState,
+								 EState *estate,
+								 int eflags) {
+	ChunkDispatchState *chunkDispatchState = (ChunkDispatchState *) customScanState;
 
-	ht = ts_hypertable_cache_get_cache_and_entry(state->hypertable_relid,
-												 CACHE_FLAG_NONE,
-												 &hypertable_cache);
-	ps = ExecInitNode(state->subplan, estate, eflags);
-	state->hypertable_cache = hypertable_cache;
-	state->dispatch = ts_chunk_dispatch_create(ht, estate, eflags);
-	state->dispatch->dispatch_state = state;
-	node->custom_ps = list_make1(ps);
+	Cache *hypertable_cache;
+	Hypertable *hyperTable = ts_hypertable_cache_get_cache_and_entry(chunkDispatchState->hypertable_relid,
+																	 CACHE_FLAG_NONE,
+																	 &hypertable_cache);
+
+	PlanState *planState = ExecInitNode(chunkDispatchState->subplan, estate, eflags);
+	chunkDispatchState->hypertable_cache = hypertable_cache;
+	chunkDispatchState->dispatch = ts_chunk_dispatch_create(hyperTable, estate, eflags);
+	chunkDispatchState->dispatch->dispatch_state = chunkDispatchState;
+
+	customScanState->custom_ps = list_make1(planState);
 }
 
 /*
@@ -47,7 +48,7 @@ chunk_dispatch_begin(CustomScanState *node, EState *estate, int eflags) {
  * chunk. Called every time we switch to another chunk for inserts.
  */
 static void
-on_chunk_insert_state_changed(ChunkInsertState *cis, void *data) {
+on_chunk_insert_state_changed(ChunkInsertState *cis, void *data) { // chunkDispatchState
 	ChunkDispatchState *state = data;
 #if PG14_LT
 	ModifyTableState *mtstate = state->mtstate;

@@ -835,8 +835,7 @@ Datum ts_dimension_transform_value(const Dimension *dim, Oid collation, Datum va
 	return value;
 }
 
-static Point *
-point_create(int16 num_dimensions) {
+static Point *point_create(int16 num_dimensions) {
 	Point *p = palloc0(POINT_SIZE(num_dimensions));
 
 	p->cardinality = num_dimensions;
@@ -845,37 +844,37 @@ point_create(int16 num_dimensions) {
 	return p;
 }
 
-TSDLLEXPORT Point *
-ts_hyperspace_calculate_point(const Hyperspace *hs, TupleTableSlot *slot) {
-	Point *p = point_create(hs->num_dimensions);
-	int i;
+TSDLLEXPORT Point *ts_hyperspace_calculate_point(const Hyperspace *hyperspace,
+												 TupleTableSlot *tupleTableSlot) {
+	Point *point = point_create(hyperspace->num_dimensions); // 设置 cardinality
 
-	for (i = 0; i < hs->num_dimensions; i++) {
-		const Dimension *d = &hs->dimensions[i];// 得到了在_timescaledb_catalog.dimension表的对应记录
+	for (int i = 0; i < hyperspace->num_dimensions; i++) {
+		const Dimension *dimension = &hyperspace->dimensions[i]; // 得到了在_timescaledb_catalog.dimension表的对应记录
 		Datum datum;
 		bool isnull;
 		Oid dimtype;
 
-		if (NULL != d->partitioning)
-			datum = ts_partitioning_func_apply_slot(d->partitioning, slot, &isnull);
-		else
-			datum = slot_getattr(slot, d->column_attno, &isnull);
+		if (NULL != dimension->partitioning) {
+			datum = ts_partitioning_func_apply_slot(dimension->partitioning, tupleTableSlot, &isnull);
+		} else {
+			datum = slot_getattr(tupleTableSlot, dimension->column_attno, &isnull);
+		}
 
-		switch (d->type) {
+		switch (dimension->type) {
 			case DIMENSION_TYPE_OPEN:
-				dimtype = ts_dimension_get_partition_type(d); // TIMESTAMPOID
+				dimtype = ts_dimension_get_partition_type(dimension); // TIMESTAMPOID
 
 				if (isnull)
 					ereport(ERROR,
 							(errcode(ERRCODE_NOT_NULL_VIOLATION),
 							 errmsg("NULL value in column \"%s\" violates not-null constraint",
-									NameStr(d->fd.column_name)),
+									NameStr(dimension->fd.column_name)),
 							 errhint("Columns used for time partitioning cannot be NULL.")));
 
-				p->coordinates[p->num_coords++] = ts_time_value_to_internal(datum, dimtype);
+				point->coordinates[point->num_coords++] = ts_time_value_to_internal(datum, dimtype);
 				break;
 			case DIMENSION_TYPE_CLOSED:
-				p->coordinates[p->num_coords++] = (int64) DatumGetInt32(datum);
+				point->coordinates[point->num_coords++] = (int64) DatumGetInt32(datum);
 				break;
 			case DIMENSION_TYPE_ANY:
 				elog(ERROR, "invalid dimension type when inserting tuple");
@@ -883,7 +882,7 @@ ts_hyperspace_calculate_point(const Hyperspace *hs, TupleTableSlot *slot) {
 		}
 	}
 
-	return p;
+	return point;
 }
 
 static inline int64

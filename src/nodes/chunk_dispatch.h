@@ -33,7 +33,7 @@ typedef struct ChunkDispatch {
 	// since we will reset the pointer in EState as we look up new chunks. 来自 estate->es_result_relation_info;
 	ResultRelInfo *hypertable_result_rel_info;
 	ChunkInsertState *prev_cis;
-	Oid prev_cis_oid;
+	Oid prev_cis_oid; // 对应的chunk的表的oid
 } ChunkDispatch;
 
 typedef struct Point Point;

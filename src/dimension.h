@@ -101,7 +101,7 @@ typedef struct DimensionInfo {
 extern Hyperspace *ts_dimension_scan(int32 hypertable_id, Oid main_table_relid, int16 num_dimension,
 									 MemoryContext mctx);
 extern DimensionSlice *ts_dimension_calculate_default_slice(const Dimension *dim, int64 value);
-extern TSDLLEXPORT Point *ts_hyperspace_calculate_point(const Hyperspace *h, TupleTableSlot *slot);
+extern TSDLLEXPORT Point *ts_hyperspace_calculate_point(const Hyperspace *hyperspace, TupleTableSlot *tupleTableSlot);
 extern int ts_dimension_get_slice_ordinal(const Dimension *dim, const DimensionSlice *slice);
 extern const Dimension *ts_hyperspace_get_dimension_by_id(const Hyperspace *hs, int32 id);
 extern TSDLLEXPORT const Dimension *ts_hyperspace_get_dimension(const Hyperspace *hs,
