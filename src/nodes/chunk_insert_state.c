@@ -78,7 +78,6 @@ static inline ResultRelInfo *create_chunk_result_relation_info(ChunkDispatch *ch
 	ResultRelInfo *resultRelInfoOrigin = chunkDispatch->hypertable_result_rel_info;
 
 	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
-
 	InitResultRelInfo(resultRelInfo,
 					  chunkTable,
 					  resultRelInfoOrigin->ri_RangeTableIndex,
@@ -600,9 +599,9 @@ extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk,
 	ResultRelInfo *relinfo = create_chunk_result_relation_info(chunkDispatch, chunkTable);
 
 	ResultRelInfo *resrelinfo;
-	if (!hasCompressedChunk)
+	if (!hasCompressedChunk) {
 		resrelinfo = relinfo;
-	else { // insert the tuple into the compressed chunk instead
+	} else { // insert the tuple into the compressed chunk instead
 		resrelinfo = create_compress_chunk_result_relation_info(chunkDispatch, chunkTableCompress);
 	}
 
@@ -750,7 +749,8 @@ extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk,
 		 * chunk insert chunkInsertState to DataNodeDispatch so that it knows which data nodes
 		 * to insert into. */
 		resrelinfo->ri_FdwState = chunkInsertState;
-	} else if (resrelinfo->ri_FdwRoutine && !resrelinfo->ri_usesFdwDirectModify &&
+	} else if (resrelinfo->ri_FdwRoutine &&
+			   !resrelinfo->ri_usesFdwDirectModify &&
 			   resrelinfo->ri_FdwRoutine->BeginForeignModify) {
 		/*
 		 * If this is a chunk located one or more data nodes, setup the

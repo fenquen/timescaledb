@@ -12,8 +12,7 @@
 
 #include "hypertable.h"
 
-typedef struct HypertableModifyPath
-{
+typedef struct HypertableModifyPath {
 	CustomPath cpath;
 	/* A bitmapset to remember which subpaths are using data node dispatching. */
 	Bitmapset *distributed_insert_plans;
@@ -21,8 +20,7 @@ typedef struct HypertableModifyPath
 	List *serveroids;
 } HypertableModifyPath;
 
-typedef struct HypertableModifyState
-{
+typedef struct HypertableModifyState {
 	CustomScanState cscan_state;
 	ModifyTable *mt;
 	List *serveroids;
@@ -30,8 +28,8 @@ typedef struct HypertableModifyState
 } HypertableModifyState;
 
 extern void ts_hypertable_modify_fixup_tlist(Plan *plan);
-extern Path *ts_hypertable_modify_path_create(PlannerInfo *root, ModifyTablePath *mtpath,
-											  Hypertable *ht, RelOptInfo *input_rel);
+extern Path *ts_hypertable_modify_path_create(PlannerInfo *root, ModifyTablePath *modifyTablePath,
+											  Hypertable *hypertable, RelOptInfo *input_rel);
 extern List *ts_replace_rowid_vars(PlannerInfo *root, List *tlist, int varno);
 
 #endif /* TIMESCALEDB_HYPERTABLE_MODIFY_H */

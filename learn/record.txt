@@ -5,9 +5,53 @@ INSERT INTO aiot("time", "value") VALUES ('2022-06-10 10:14:48'::TIMESTAMP, 'a')
 
 
 SELECT pg_backend_pid();
+explain select * from aiot where  "time" >= '2022-06-28' and "time" < '2022-06-30';
+
 使得schema visible
     GRANT USAGE ON SCHEMA pg_catalog TO PUBLIC;
 
+
+
+
+--------------------------------------------------
+-- 只是创建普通的继承表 有了子表的constrain后也能定位到对应的部分
+CREATE TABLE "parent" (
+  "time" timestamp(6) NOT NULL,
+  "value" varchar(255)
+);
+
+CREATE TABLE "child1" (
+  "time" timestamp(6) NOT NULL,
+  "value" varchar(255)
+)INHERITS ("parent");
+
+ALTER TABLE "child1"
+ADD CONSTRAINT "child1_constraint_1" CHECK (
+"time" >= '2022-06-16 00:00:00'::timestamp without time zone AND
+"time" < '2022-06-23 00:00:00'::timestamp without time zone);
+
+explain SELECT * from parent where  "time" >= '2022-06-18' and "time" < '2022-06-30';
+Append  (cost=0.00..12.11 rows=2 width=524)
+  ->  Seq Scan on parent  (cost=0.00..0.00 rows=1 width=524)
+        Filter: (("time" >= '2022-06-18 00:00:00'::timestamp without time zone) AND ("time" < '2022-06-30 00:00:00'::timestamp without time zone))
+  ->  Seq Scan on child1  (cost=0.00..12.10 rows=1 width=524)
+        Filter: (("time" >= '2022-06-18 00:00:00'::timestamp without time zone) AND ("time" < '2022-06-30 00:00:00'::timestamp without time zone))
+-------------------------------------------------------
+
+INSERT INTO aiot1("time","device_id","value") VALUES (NOW(),'dev1', 61.07);
+
+CREATE TABLE "public"."aiot1" (
+  "time" timestamp,
+  "device_id" varchar(255),
+  "name" varchar(255),
+  "value" float8
+);
+
+SELECT create_hypertable('aiot1','time','device_id',1007);
+
+
+
+---------------------------------------------------------
 
 FormData打头的struct本质表对应的对象和java相同
 
@@ -21,7 +65,15 @@ EXPLAIN  INSERT INTO aiot("time", "value") VALUES (NOW(), 'a');
          ->  Custom Scan (ChunkDispatch)  (cost=0.00..0.01 rows=1 width=524)
                ->  Result  (cost=0.00..0.01 rows=1 width=524)
 
-用来篡改默认行为的函数集合
+PlanState *ExecInitNode(Plan *node, EState *estate, int eflags)
+    ModifyTableState *ExecInitModifyTable(ModifyTable *node, EState *estate, int eflags)
+        CustomScanState *ExecInitCustomScan(CustomScan *cscan, EState *estate, int eflags)
+            ResultState *ExecInitResult(Result *node, EState *estate, int eflags)
+
+TupleTableSlot *ExecProcNode(PlanState *planState)
+
+
+用来篡改默认行为的函数集合 path->plan->state
 
 
                     timescaledb_create_upper_paths_hook

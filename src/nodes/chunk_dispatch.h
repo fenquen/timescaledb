@@ -22,7 +22,7 @@
  * separate from any plan and executor nodes, since it is used both for INSERT and COPY.
  */
 typedef struct ChunkDispatch {
-	/* Link to the executor state for INSERTs. This is not set for COPY path. */
+	/* Link to the executor state for INSERT. This is not set for COPY path. */
 	const struct ChunkDispatchState *dispatch_state;
 	Hypertable *hypertable;
 	SubspaceStore *cache;
@@ -32,6 +32,8 @@ typedef struct ChunkDispatch {
 	// Keep a pointer to the original (hypertable's) ResultRelInfo
 	// since we will reset the pointer in EState as we look up new chunks. 来自 estate->es_result_relation_info;
 	ResultRelInfo *hypertable_result_rel_info;
+
+
 	ChunkInsertState *prev_cis;
 	Oid prev_cis_oid; // 对应的chunk的表的oid
 } ChunkDispatch;
@@ -40,11 +42,12 @@ typedef struct Point Point;
 
 typedef void (*on_chunk_changed_func)(ChunkInsertState *state, void *data);
 
-extern ChunkDispatch *ts_chunk_dispatch_create(Hypertable *ht, EState *estate, int eflags);
+extern ChunkDispatch *ts_chunk_dispatch_create(Hypertable *hypertable, EState *estate, int eflags);
 extern void ts_chunk_dispatch_destroy(ChunkDispatch *dispatch);
-extern ChunkInsertState *
-ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch *chunkDispatch, Point *p,
-										 const on_chunk_changed_func on_chunk_changed, void *data);
+extern ChunkInsertState *ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch *chunkDispatch,
+																  Point *p,
+																  const on_chunk_changed_func on_chunk_changed,
+																  void *data);
 extern bool ts_chunk_dispatch_has_returning(const ChunkDispatch *dispatch);
 extern List *ts_chunk_dispatch_get_returning_clauses(const ChunkDispatch *dispatch);
 extern List *ts_chunk_dispatch_get_arbiter_indexes(const ChunkDispatch *dispatch);

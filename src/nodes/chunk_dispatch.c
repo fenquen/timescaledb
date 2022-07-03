@@ -18,20 +18,23 @@
 #include "dimension.h"
 #include "guc.h"
 
-ChunkDispatch *
-ts_chunk_dispatch_create(Hypertable *ht, EState *estate, int eflags) {
-	ChunkDispatch *cd = palloc0(sizeof(ChunkDispatch));
+ChunkDispatch *ts_chunk_dispatch_create(Hypertable *hypertable,
+										EState *estate,
+										int eflags) {
+	ChunkDispatch *chunkDispatch = palloc0(sizeof(ChunkDispatch));
 
-	cd->hypertable = ht;
-	cd->estate = estate;
-	cd->eflags = eflags;
-	cd->hypertable_result_rel_info = NULL;
-	cd->cache =
-		ts_subspace_store_init(ht->space, estate->es_query_cxt, ts_guc_max_open_chunks_per_insert);
-	cd->prev_cis = NULL;
-	cd->prev_cis_oid = InvalidOid;
+	chunkDispatch->hypertable = hypertable;
+	chunkDispatch->estate = estate;
+	chunkDispatch->eflags = eflags;
 
-	return cd;
+	chunkDispatch->hypertable_result_rel_info = NULL;
+	chunkDispatch->cache = ts_subspace_store_init(hypertable->space,
+												  estate->es_query_cxt,
+												  ts_guc_max_open_chunks_per_insert);
+	chunkDispatch->prev_cis = NULL;
+	chunkDispatch->prev_cis_oid = InvalidOid;
+
+	return chunkDispatch;
 }
 
 static inline ModifyTableState *
@@ -96,7 +99,7 @@ static void destroy_chunk_insert_state(void *chunkDispatch) {
 extern ChunkInsertState *ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch *chunkDispatch,
 																  Point *point,
 																  const on_chunk_changed_func on_chunk_changed,
-																  void *data) {// chunkDispatchState
+																  void *data) { // chunkDispatchState
 	bool chunkInsertStateChanged = true;
 
 	/* Direct inserts into internal compressed hypertable is not supported.
@@ -107,9 +110,6 @@ extern ChunkInsertState *ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch 
 	if (chunkDispatch->hypertable->fd.compression_state == HypertableInternalCompressionTable) {
 		elog(ERROR, "direct insert into internal compressed hypertable is not supported");
 	}
-
-
-
 
 	// 试图得到对应的chunkInsertState
 	ChunkInsertState *chunkInsertState = ts_subspace_store_get(chunkDispatch->cache, point);
@@ -126,7 +126,6 @@ extern ChunkInsertState *ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch 
 		// 纯新的创建
 		chunkInsertState = ts_chunk_insert_state_create(newChunk, chunkDispatch);
 
-
 		// 把这个新生成的添加到对应的链路的尾部
 		ts_subspace_store_add(chunkDispatch->cache,
 							  newChunk->cube,
@@ -138,7 +137,9 @@ extern ChunkInsertState *ts_chunk_dispatch_get_chunk_insert_state(ChunkDispatch 
 	}
 
 	if (chunkInsertStateChanged && on_chunk_changed) {
-		on_chunk_changed(chunkInsertState, data);
+		// 把chunkInsertState的tupleSlot 转移 modifyTableState
+		// 把chunkInsertState的resultRelInfo 转移 chunkDispatchState
+		on_chunk_changed(chunkInsertState, data); // on_chunk_insert_state_changed
 	}
 
 	Assert(chunkInsertState != NULL);

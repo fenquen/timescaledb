@@ -67,12 +67,9 @@ static void ExecCheckTIDVisible(EState *estate, ResultRelInfo *relinfo, ItemPoin
 #endif
 
 static List *
-get_chunk_dispatch_states(PlanState *substate)
-{
-	switch (nodeTag(substate))
-	{
-		case T_CustomScanState:
-		{
+get_chunk_dispatch_states(PlanState *substate) {
+	switch (nodeTag(substate)) {
+		case T_CustomScanState: {
 			CustomScanState *csstate = castNode(CustomScanState, substate);
 			ListCell *lc;
 			List *result = NIL;
@@ -84,8 +81,7 @@ get_chunk_dispatch_states(PlanState *substate)
 			 * In case of remote insert, the ChunkDispatchState could be a
 			 * child of a ServerDispatchState subnode.
 			 */
-			foreach (lc, csstate->custom_ps)
-			{
+			foreach (lc, csstate->custom_ps) {
 				PlanState *ps = lfirst(lc);
 
 				result = list_concat(result, get_chunk_dispatch_states(ps));
@@ -102,80 +98,78 @@ get_chunk_dispatch_states(PlanState *substate)
 }
 
 /*
- * HypertableInsert (with corresponding executor node) is a plan node that
- * implements INSERTs for hypertables. It is mostly a wrapper around the
- * ModifyTable plan node that simply calls the wrapped ModifyTable plan without
+ * HypertableInsert (with corresponding executor customScanState) is a plan customScanState that
+ * implements INSERT for hypertable. It is mostly a wrapper around the
+ * ModifyTable plan customScanState that simply calls the wrapped ModifyTable plan without
  * doing much else, apart from some initial state setup.
  *
  * The wrapping is needed to setup state in the execution phase, and give access
- * to the ModifyTableState node to sub-plan states in the PlanState tree. For
- * instance, the ChunkDispatchState node needs to set the arbiter index list in
- * the ModifyTableState node whenever it inserts into a new chunk.
+ * to the ModifyTableState customScanState to sub-plan states in the PlanState tree. For
+ * instance, the ChunkDispatchState customScanState needs to set the arbiter index list in
+ * the ModifyTableState customScanState whenever it inserts into a new chunk.
  */
-static void
-hypertable_modify_begin(CustomScanState *node, EState *estate, int eflags)
-{
-	HypertableModifyState *state = (HypertableModifyState *) node;
-	ModifyTableState *mtstate;
-	PlanState *ps;
-	List *chunk_dispatch_states = NIL;
-	ListCell *lc;
+static void hypertable_modify_begin(CustomScanState *customScanState,
+									EState *estate,
+									int eflags) {
+	HypertableModifyState *hypertableModifyState = (HypertableModifyState *) customScanState;
 
-	ModifyTable *mt = castNode(ModifyTable, &state->mt->plan);
+	ModifyTable *modifyTable = castNode(ModifyTable, &hypertableModifyState->mt->plan);
+
 	/*
 	 * To make statement trigger defined on the hypertable work
 	 * we need to set the hypertable as the rootRelation otherwise
 	 * statement trigger defined only on the hypertable will not fire.
 	 */
-	if (mt->operation == CMD_DELETE || mt->operation == CMD_UPDATE)
-		mt->rootRelation = mt->nominalRelation;
+	if (modifyTable->operation == CMD_DELETE || modifyTable->operation == CMD_UPDATE) {
+		modifyTable->rootRelation = modifyTable->nominalRelation;
+	}
 
-	ps = ExecInitNode(&mt->plan, estate, eflags);
-	node->custom_ps = list_make1(ps);
-	mtstate = castNode(ModifyTableState, ps);
+	PlanState *ps = ExecInitNode(&modifyTable->plan, estate, eflags); // 都往下边去甩得到modifyTableState
+	customScanState->custom_ps = list_make1(ps);
+
+	ModifyTableState *modifyTableState = castNode(ModifyTableState, ps);
 
 	/*
-	 * If this is not the primary ModifyTable node, postgres added it to the
+	 * If this is not the primary ModifyTable customScanState, postgres added it to the
 	 * beginning of es_auxmodifytables, to be executed by ExecPostprocessPlan.
-	 * Unfortunately that strips off the HypertableInsert node leading to
+	 * Unfortunately that strips off the HypertableInsert customScanState leading to
 	 * tuple routing not working in INSERTs inside CTEs. To make INSERTs
 	 * inside CTEs work we have to fix es_auxmodifytables and add back the
 	 * HypertableModifyState.
 	 */
-	if (estate->es_auxmodifytables && linitial(estate->es_auxmodifytables) == mtstate)
-		linitial(estate->es_auxmodifytables) = node;
+	if (estate->es_auxmodifytables && linitial(estate->es_auxmodifytables) == modifyTableState)
+		linitial(estate->es_auxmodifytables) = customScanState;
 
 		/*
 		 * Find all ChunkDispatchState subnodes and set their parent
-		 * ModifyTableState node
+		 * ModifyTableState customScanState
 		 * We assert we only have 1 ModifyTable subpath when we create
 		 * the HypertableInsert path so this should not have changed here.
 		 */
 #if PG14_LT
-	Assert(mtstate->mt_nplans == 1);
-	PlanState *subplan = mtstate->mt_plans[0];
+	Assert(modifyTableState->mt_nplans == 1);
+	PlanState *subplan = modifyTableState->mt_plans[0];
 #else
-	PlanState *subplan = outerPlanState(mtstate);
+	PlanState *subplan = outerPlanState(modifyTableState);
 #endif
 
-	if (mtstate->operation == CMD_INSERT)
-	{
-		/* setup chunk dispatch state only for INSERTs */
-		chunk_dispatch_states = get_chunk_dispatch_states(subplan);
+	if (modifyTableState->operation == CMD_INSERT) {
+		/* setup chunk dispatch hypertableModifyState only for INSERTs */
+		List *chunkDispatchStateList = get_chunk_dispatch_states(subplan);
 
-		/* Ensure that we found at least one ChunkDispatchState node */
-		Assert(list_length(chunk_dispatch_states) > 0);
+		/* Ensure that we found at least one ChunkDispatchState customScanState */
+		Assert(list_length(chunkDispatchStateList) > 0);
 
-		foreach (lc, chunk_dispatch_states)
-			ts_chunk_dispatch_state_set_parent((ChunkDispatchState *) lfirst(lc), mtstate);
+		ListCell *lc;
+		foreach (lc, chunkDispatchStateList)
+			ts_chunk_dispatch_state_set_parent((ChunkDispatchState *) lfirst(lc), modifyTableState);
 	}
 }
 
 static TupleTableSlot *
-hypertable_modify_exec(CustomScanState *node)
-{
+hypertable_modify_exec(CustomScanState *node) {
 #if PG14_LT
-	return ExecProcNode(linitial(node->custom_ps));
+	return ExecProcNode(linitial(node->custom_ps)); // 其实是之前在hypertable_modify_begin时候写入的modifyTableState
 #else
 	ModifyTableState *mtstate = linitial_node(ModifyTableState, node->custom_ps);
 	return ExecModifyTable(&mtstate->ps);
@@ -183,20 +177,17 @@ hypertable_modify_exec(CustomScanState *node)
 }
 
 static void
-hypertable_modify_end(CustomScanState *node)
-{
+hypertable_modify_end(CustomScanState *node) {
 	ExecEndNode(linitial(node->custom_ps));
 }
 
 static void
-hypertable_modify_rescan(CustomScanState *node)
-{
+hypertable_modify_rescan(CustomScanState *node) {
 	ExecReScan(linitial(node->custom_ps));
 }
 
 static void
-hypertable_modify_explain(CustomScanState *node, List *ancestors, ExplainState *es)
-{
+hypertable_modify_explain(CustomScanState *node, List *ancestors, ExplainState *es) {
 	HypertableModifyState *state = (HypertableModifyState *) node;
 	List *fdw_private = linitial_node(List, state->mt->fdwPrivLists);
 	ModifyTableState *mtstate = linitial_node(ModifyTableState, node->custom_ps);
@@ -213,8 +204,7 @@ hypertable_modify_explain(CustomScanState *node, List *ancestors, ExplainState *
 	 * for ModifyTable for EXPLAIN VERBOSE.
 	 */
 	if (((ModifyTable *) mtstate->ps.plan)->operation == CMD_DELETE && es->verbose &&
-		ts_is_chunk_append_plan(mtstate->ps.plan->lefttree))
-	{
+		ts_is_chunk_append_plan(mtstate->ps.plan->lefttree)) {
 		mtstate->ps.plan->lefttree->targetlist = NULL;
 		((CustomScan *) mtstate->ps.plan->lefttree)->custom_scan_tlist = NULL;
 	}
@@ -226,12 +216,10 @@ hypertable_modify_explain(CustomScanState *node, List *ancestors, ExplainState *
 	mtstate->ps.instrument = node->ss.ps.instrument;
 #endif
 
-	if (NULL != state->fdwroutine)
-	{
+	if (NULL != state->fdwroutine) {
 		appendStringInfo(es->str, "Insert on distributed hypertable");
 
-		if (es->verbose)
-		{
+		if (es->verbose) {
 			List *node_names = NIL;
 			ListCell *lc;
 
@@ -240,16 +228,14 @@ hypertable_modify_explain(CustomScanState *node, List *ancestors, ExplainState *
 							 quote_identifier(namespace),
 							 quote_identifier(relname));
 
-			foreach (lc, state->serveroids)
-			{
+			foreach (lc, state->serveroids) {
 				ForeignServer *server = GetForeignServer(lfirst_oid(lc));
 
 				node_names = lappend(node_names, server->servername);
 			}
 
 			ExplainPropertyList("Data nodes", node_names, es);
-		}
-		else
+		} else
 			appendStringInfo(es->str, " %s\n", quote_identifier(relname));
 
 		/* Let the foreign data wrapper add its part of the explain, but only
@@ -272,37 +258,28 @@ static CustomExecMethods hypertable_modify_state_methods = {
 	.ExplainCustomScan = hypertable_modify_explain,
 };
 
-static Node *
-hypertable_modify_state_create(CustomScan *cscan)
-{
-	HypertableModifyState *state;
-	ModifyTable *mt = castNode(ModifyTable, linitial(cscan->custom_plans));
+static Node *hypertable_modify_state_create(CustomScan *customScan) {
+	ModifyTable *modifyTable = castNode(ModifyTable, linitial(customScan->custom_plans));
+
+	HypertableModifyState *hyperTableModifyState = (HypertableModifyState *) newNode(sizeof(HypertableModifyState), T_CustomScanState);
+	hyperTableModifyState->cscan_state.methods = &hypertable_modify_state_methods;
+	hyperTableModifyState->mt = modifyTable;
+	hyperTableModifyState->mt->arbiterIndexes = linitial(customScan->custom_private);
+
+	// Get the list of data nodes to insert on.
+	hyperTableModifyState->serveroids = lsecond(customScan->custom_private);
+
+	// Get the FDW routine for the first data node. It should be the same for all of them
 	Oid serverid;
-
-	state = (HypertableModifyState *) newNode(sizeof(HypertableModifyState), T_CustomScanState);
-	state->cscan_state.methods = &hypertable_modify_state_methods;
-	state->mt = mt;
-	state->mt->arbiterIndexes = linitial(cscan->custom_private);
-
-	/*
-	 * Get the list of data nodes to insert on.
-	 */
-	state->serveroids = lsecond(cscan->custom_private);
-
-	/*
-	 * Get the FDW routine for the first data node. It should be the same for
-	 * all of them
-	 */
-	if (NIL != state->serveroids)
-	{
-		serverid = linitial_oid(state->serveroids);
-		state->fdwroutine = GetFdwRoutineByServerId(serverid);
-		Assert(state->fdwroutine != NULL);
+	if (NIL != hyperTableModifyState->serveroids) {
+		serverid = linitial_oid(hyperTableModifyState->serveroids);
+		hyperTableModifyState->fdwroutine = GetFdwRoutineByServerId(serverid);
+		Assert(hyperTableModifyState->fdwroutine != NULL);
+	} else {
+		hyperTableModifyState->fdwroutine = NULL;
 	}
-	else
-		state->fdwroutine = NULL;
 
-	return (Node *) state;
+	return (Node *) hyperTableModifyState;
 }
 
 static CustomScanMethods hypertable_modify_plan_methods = {
@@ -327,14 +304,12 @@ static CustomScanMethods hypertable_modify_plan_methods = {
  * projection is needed, so we'll build a targetlist to avoid this.
  */
 static List *
-make_var_targetlist(const List *tlist)
-{
+make_var_targetlist(const List *tlist) {
 	List *new_tlist = NIL;
 	ListCell *lc;
 	int resno = 1;
 
-	foreach (lc, tlist)
-	{
+	foreach (lc, tlist) {
 		TargetEntry *tle = lfirst_node(TargetEntry, lc);
 		Var *var = makeVarFromTargetEntry(INDEX_VAR, tle);
 
@@ -354,8 +329,7 @@ make_var_targetlist(const List *tlist)
  */
 static void
 plan_remote_modify(PlannerInfo *root, HypertableModifyPath *hmpath, ModifyTable *mt,
-				   FdwRoutine *fdwroutine)
-{
+				   FdwRoutine *fdwroutine) {
 	List *fdw_private_list = NIL;
 	/* Keep any existing direct modify plans */
 	Bitmapset *direct_modify_plans = mt->fdwDirectModifyPlans;
@@ -367,8 +341,7 @@ plan_remote_modify(PlannerInfo *root, HypertableModifyPath *hmpath, ModifyTable 
 	 * have to plan it using the FDW or, in case of data node dispatching, we
 	 * just need to mark the plan as "direct" to let ModifyTable know it
 	 * should not invoke the regular FDW modify API. */
-	foreach (lc, mt->resultRelations)
-	{
+	foreach (lc, mt->resultRelations) {
 		Index rti = lfirst_int(lc);
 		RangeTblEntry *rte = planner_rt_fetch(rti, root);
 		List *fdwprivate = NIL;
@@ -403,24 +376,17 @@ plan_remote_modify(PlannerInfo *root, HypertableModifyPath *hmpath, ModifyTable 
  * target list, which now exists after having been created by
  * set_plan_references().
  */
-void
-ts_hypertable_modify_fixup_tlist(Plan *plan)
-{
-	if (IsA(plan, CustomScan))
-	{
+void ts_hypertable_modify_fixup_tlist(Plan *plan) {
+	if (IsA(plan, CustomScan)) {
 		CustomScan *cscan = (CustomScan *) plan;
 
-		if (cscan->methods == &hypertable_modify_plan_methods)
-		{
+		if (cscan->methods == &hypertable_modify_plan_methods) {
 			ModifyTable *mt = linitial_node(ModifyTable, cscan->custom_plans);
 
-			if (mt->plan.targetlist == NIL)
-			{
+			if (mt->plan.targetlist == NIL) {
 				cscan->custom_scan_tlist = NIL;
 				cscan->scan.plan.targetlist = NIL;
-			}
-			else
-			{
+			} else {
 				/* The input is the output of the child ModifyTable node */
 				cscan->custom_scan_tlist = mt->plan.targetlist;
 
@@ -434,16 +400,13 @@ ts_hypertable_modify_fixup_tlist(Plan *plan)
 /* ROWID_VAR only exists in PG14+ */
 #if PG14_GE
 List *
-ts_replace_rowid_vars(PlannerInfo *root, List *tlist, int varno)
-{
+ts_replace_rowid_vars(PlannerInfo *root, List *tlist, int varno) {
 	ListCell *lc;
 	tlist = list_copy(tlist);
-	foreach (lc, tlist)
-	{
+	foreach (lc, tlist) {
 		TargetEntry *tle = lfirst_node(TargetEntry, lc);
 
-		if (IsA(tle->expr, Var) && castNode(Var, tle->expr)->varno == ROWID_VAR)
-		{
+		if (IsA(tle->expr, Var) && castNode(Var, tle->expr)->varno == ROWID_VAR) {
 			tle = copyObject(tle);
 			Var *var = castNode(Var, copyObject(tle->expr));
 			RowIdentityVarInfo *ridinfo =
@@ -460,30 +423,30 @@ ts_replace_rowid_vars(PlannerInfo *root, List *tlist, int varno)
 }
 #endif
 
-static Plan *
-hypertable_modify_plan_create(PlannerInfo *root, RelOptInfo *rel, CustomPath *best_path,
-							  List *tlist, List *clauses, List *custom_plans)
-{
-	HypertableModifyPath *hmpath = (HypertableModifyPath *) best_path;
-	CustomScan *cscan = makeNode(CustomScan);
-	ModifyTable *mt = linitial_node(ModifyTable, custom_plans);
+static Plan *hypertable_modify_plan_create(PlannerInfo *root,
+										   RelOptInfo *rel,
+										   CustomPath *best_path, // hyperTableModifyPath
+										   List *tlist,
+										   List *clauses,
+										   List *custom_plans) {
+	HypertableModifyPath *hypertableModifyPath = (HypertableModifyPath *) best_path;
+	CustomScan *customPlan = makeNode(CustomScan);
+	ModifyTable *modifyTable = linitial_node(ModifyTable, custom_plans);
 	FdwRoutine *fdwroutine = NULL;
 
-	cscan->methods = &hypertable_modify_plan_methods;
-	cscan->custom_plans = custom_plans;
-	cscan->scan.scanrelid = 0;
+	customPlan->methods = &hypertable_modify_plan_methods;
+	customPlan->custom_plans = custom_plans;
+	customPlan->scan.scanrelid = 0;
 
 	/* Copy costs, etc., from the original plan */
-	cscan->scan.plan.startup_cost = mt->plan.startup_cost;
-	cscan->scan.plan.total_cost = mt->plan.total_cost;
-	cscan->scan.plan.plan_rows = mt->plan.plan_rows;
-	cscan->scan.plan.plan_width = mt->plan.plan_width;
+	customPlan->scan.plan.startup_cost = modifyTable->plan.startup_cost;
+	customPlan->scan.plan.total_cost = modifyTable->plan.total_cost;
+	customPlan->scan.plan.plan_rows = modifyTable->plan.plan_rows;
+	customPlan->scan.plan.plan_width = modifyTable->plan.plan_width;
 
-	if (NIL != hmpath->serveroids)
-	{
-		/* Get the foreign data wrapper routines for the first data node. Should be
-		 * the same for all data nodes. */
-		Oid serverid = linitial_oid(hmpath->serveroids);
+	if (NIL != hypertableModifyPath->serveroids) {
+		/* Get the foreign data wrapper routines for the first data node. Should be the same for all data nodes. */
+		Oid serverid = linitial_oid(hypertableModifyPath->serveroids);
 
 		fdwroutine = GetFdwRoutineByServerId(serverid);
 	}
@@ -498,7 +461,7 @@ hypertable_modify_plan_create(PlannerInfo *root, RelOptInfo *rel, CustomPath *be
 	 * e.g., a deparsed INSERT statement that references the hypertable
 	 * instead of a chunk.
 	 */
-	plan_remote_modify(root, hmpath, mt, fdwroutine);
+	plan_remote_modify(root, hypertableModifyPath, modifyTable, fdwroutine);
 
 	/* The tlist is always NIL since the ModifyTable subplan doesn't have its
 	 * targetlist set until set_plan_references (setrefs.c) is run */
@@ -536,7 +499,7 @@ hypertable_modify_plan_create(PlannerInfo *root, RelOptInfo *rel, CustomPath *be
 	 * root->processed_tlist, and at the end of planning when the ModifyTable's
 	 * targetlist is set, we go back and fix up the CustomScan's targetlist.
 	 */
-	cscan->scan.plan.targetlist = copyObject(root->processed_tlist);
+	customPlan->scan.plan.targetlist = copyObject(root->processed_tlist);
 
 	/*
 	 * For UPDATE/DELETE processed_tlist will have ROWID_VAR. We need to remove
@@ -544,24 +507,20 @@ hypertable_modify_plan_create(PlannerInfo *root, RelOptInfo *rel, CustomPath *be
 	 * ROWID_VAR entries in the targetlist.
 	 */
 #if PG14_GE
-	if (mt->operation == CMD_UPDATE || mt->operation == CMD_DELETE)
-	{
-		cscan->scan.plan.targetlist =
-			ts_replace_rowid_vars(root, cscan->scan.plan.targetlist, mt->nominalRelation);
+	if (modifyTable->operation == CMD_UPDATE || modifyTable->operation == CMD_DELETE) {
+		customPlan->scan.plan.targetlist =
+			ts_replace_rowid_vars(root, customPlan->scan.plan.targetlist, modifyTable->nominalRelation);
 
-		if (mt->operation == CMD_UPDATE && ts_is_chunk_append_plan(mt->plan.lefttree))
-		{
-			mt->plan.lefttree->targetlist =
-				ts_replace_rowid_vars(root, mt->plan.lefttree->targetlist, mt->nominalRelation);
+		if (modifyTable->operation == CMD_UPDATE && ts_is_chunk_append_plan(modifyTable->plan.lefttree)) {
+			modifyTable->plan.lefttree->targetlist =
+				ts_replace_rowid_vars(root, modifyTable->plan.lefttree->targetlist, modifyTable->nominalRelation);
 		}
 	}
 #else
-	/*
-	 * For postgres versions < PG14 we only route INSERT through our custom node.
-	 */
-	Assert(mt->operation == CMD_INSERT);
+	// For postgres versions < PG14 we only route INSERT through our custom node.
+	Assert(modifyTable->operation == CMD_INSERT);
 #endif
-	cscan->custom_scan_tlist = cscan->scan.plan.targetlist;
+	customPlan->custom_scan_tlist = customPlan->scan.plan.targetlist;
 
 	/*
 	 * we save the original list of arbiter indexes here
@@ -571,9 +530,9 @@ hypertable_modify_plan_create(PlannerInfo *root, RelOptInfo *rel, CustomPath *be
 	 *
 	 * We also pass on the data nodes to insert on.
 	 */
-	cscan->custom_private = list_make2(mt->arbiterIndexes, hmpath->serveroids);
+	customPlan->custom_private = list_make2(modifyTable->arbiterIndexes, hypertableModifyPath->serveroids);
 
-	return &cscan->scan.plan;
+	return &customPlan->scan.plan;
 }
 
 static CustomPathMethods hypertable_modify_path_methods = {
@@ -581,26 +540,22 @@ static CustomPathMethods hypertable_modify_path_methods = {
 	.PlanCustomPath = hypertable_modify_plan_create,
 };
 
-Path *
-ts_hypertable_modify_path_create(PlannerInfo *root, ModifyTablePath *mtpath, Hypertable *ht,
-								 RelOptInfo *rel)
-{
-	Path *path = &mtpath->path;
-	Path *subpath = NULL;
+Path *ts_hypertable_modify_path_create(PlannerInfo *root,
+									   ModifyTablePath *modifyTablePath,
+									   Hypertable *hypertable,
+									   RelOptInfo *rel) {
 	Cache *hcache = ts_hypertable_cache_pin();
 	Bitmapset *distributed_insert_plans = NULL;
-	HypertableModifyPath *hmpath;
-	int i = 0;
 
 #if PG14_LT
 	/* Since it's theoretically possible for ModifyTablePath to have multiple subpaths
-	 * in PG < 14 we assert that we only get 1 subpath here. */
-	Assert(list_length(mtpath->subpaths) == list_length(mtpath->resultRelations));
-	if (list_length(mtpath->subpaths) > 1)
+	 * in PG < 14 we assert that we only get 1 subPath here. */
+	Assert(list_length(modifyTablePath->subpaths) == list_length(modifyTablePath->resultRelations));
+	if (list_length(modifyTablePath->subpaths) > 1) {
 		/* This should never happen but if it ever does it's safer to
-		 * error here as the rest of the code assumes there is only 1 subpath.
-		 */
+		 * error here as the rest of the code assumes there is only 1 subPath.*/
 		elog(ERROR, "multiple top-level subpaths found during INSERT");
+	}
 #endif
 
 #if PG14_GE
@@ -608,52 +563,57 @@ ts_hypertable_modify_path_create(PlannerInfo *root, ModifyTablePath *mtpath, Hyp
 	 * empty. Since we do not know target chunks during planning we
 	 * do not have that information when postgres creates the path.
 	 */
-	if (mtpath->returningLists == NIL)
-	{
-		mtpath->path.rows = mtpath->subpath->rows;
-		mtpath->path.pathtarget->width = mtpath->subpath->pathtarget->width;
+	if (modifyTablePath->returningLists == NIL) {
+		modifyTablePath->path.rows = modifyTablePath->subPath->rows;
+		modifyTablePath->path.pathtarget->width = modifyTablePath->subPath->pathtarget->width;
 	}
 #endif
 
-	Index rti = mtpath->nominalRelation;
+	Index rti = modifyTablePath->nominalRelation;
 
-	if (root->parse->onConflict && OidIsValid(root->parse->onConflict->constraint))
+	if (root->parse->onConflict && OidIsValid(root->parse->onConflict->constraint)) {
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("hypertables do not support ON CONFLICT statements that reference "
-						"constraints"),
-				 errhint("Use column names to infer indexes instead.")));
-
-	if (mtpath->operation == CMD_INSERT)
-	{
-		if (hypertable_is_distributed(ht) && ts_guc_max_insert_batch_size > 0)
-		{
-			/* Remember that this will become a data node dispatch/copy
-			 * plan. We need to know later whether or not to plan this
-			 * using the FDW API. */
-			distributed_insert_plans = bms_add_member(distributed_insert_plans, i);
-			subpath = ts_cm_functions->distributed_insert_path_create(root, mtpath, rti, i);
-		}
-		else
-			subpath = ts_chunk_dispatch_path_create(root, mtpath, rti, i);
+				 errmsg("hyper tables do not support ON CONFLICT statements that reference constraints"),
+				 errhint("use column names to infer indexes instead.")));
 	}
 
-	hmpath = palloc0(sizeof(HypertableModifyPath));
+	int i = 0;
+
+	Path *subPath = NULL;
+	if (modifyTablePath->operation == CMD_INSERT) {
+		if (hypertable_is_distributed(hypertable) && ts_guc_max_insert_batch_size > 0) {
+			/* Remember that this will become a data node dispatch/copy
+			 * plan. We need to know later whether or not to plan this using the FDW API. */
+			distributed_insert_plans = bms_add_member(distributed_insert_plans, i);
+			subPath = ts_cm_functions->distributed_insert_path_create(root, modifyTablePath, rti, i);
+		} else {
+			subPath = ts_chunk_dispatch_path_create(root, modifyTablePath, rti, i);
+		}
+	}
+
+	HypertableModifyPath *hypertableModifyPath = palloc0(sizeof(HypertableModifyPath));
+
+	Path *path = &modifyTablePath->path;
 
 	/* Copy costs, etc. */
-	memcpy(&hmpath->cpath.path, path, sizeof(Path));
-	hmpath->cpath.path.type = T_CustomPath;
-	hmpath->cpath.path.pathtype = T_CustomScan;
-	hmpath->cpath.custom_paths = list_make1(mtpath);
-	hmpath->cpath.methods = &hypertable_modify_path_methods;
-	hmpath->distributed_insert_plans = distributed_insert_plans;
-	hmpath->serveroids = ts_hypertable_get_available_data_node_server_oids(ht);
-	path = &hmpath->cpath.path;
+	memcpy(&hypertableModifyPath->cpath.path, path, sizeof(Path));
+	hypertableModifyPath->cpath.path.type = T_CustomPath;
+	hypertableModifyPath->cpath.path.pathtype = T_CustomScan;
+
+	hypertableModifyPath->cpath.custom_paths = list_make1(modifyTablePath); // HypertableModify -> modifyTable
+	hypertableModifyPath->cpath.methods = &hypertable_modify_path_methods;
+
+	hypertableModifyPath->distributed_insert_plans = distributed_insert_plans;
+	hypertableModifyPath->serveroids = ts_hypertable_get_available_data_node_server_oids(hypertable);
+
+	// 不起眼然而相当重要
+	path = &hypertableModifyPath->cpath.path;
 #if PG14_LT
-	mtpath->subpaths = list_make1(subpath);
+	modifyTablePath->subpaths = list_make1(subPath); // modifyTable -> chunkDispatch
 #else
-	if (subpath)
-		mtpath->subpath = subpath;
+	if (subPath)
+		modifyTablePath->subPath = subPath;
 #endif
 
 	ts_cache_release(hcache);
@@ -672,8 +632,7 @@ ts_hypertable_modify_path_create(PlannerInfo *root, ModifyTablePath *mtpath, Hyp
  * modified version of ExecModifyTable from executor/nodeModifyTable.c
  */
 static TupleTableSlot *
-ExecModifyTable(PlanState *pstate)
-{
+ExecModifyTable(PlanState *pstate) {
 	ModifyTableState *node = castNode(ModifyTableState, pstate);
 	EState *estate = node->ps.state;
 	CmdType operation = node->operation;
@@ -716,8 +675,7 @@ ExecModifyTable(PlanState *pstate)
 	/*
 	 * On first call, fire BEFORE STATEMENT triggers before proceeding.
 	 */
-	if (node->fireBSTriggers)
-	{
+	if (node->fireBSTriggers) {
 		fireBSTriggers(node);
 		node->fireBSTriggers = false;
 	}
@@ -726,14 +684,10 @@ ExecModifyTable(PlanState *pstate)
 	resultRelInfo = node->resultRelInfo + node->mt_lastResultIndex;
 	subplanstate = outerPlanState(node);
 
-	if (operation == CMD_INSERT)
-	{
-		if (ts_is_chunk_dispatch_state(subplanstate))
-		{
+	if (operation == CMD_INSERT) {
+		if (ts_is_chunk_dispatch_state(subplanstate)) {
 			cds = (ChunkDispatchState *) subplanstate;
-		}
-		else
-		{
+		} else {
 			Assert(list_length(get_chunk_dispatch_states(subplanstate)) == 1);
 			cds = linitial(get_chunk_dispatch_states(subplanstate));
 		}
@@ -743,8 +697,7 @@ ExecModifyTable(PlanState *pstate)
 	 * Fetch rows from subplan, and execute the required table modification
 	 * for each row.
 	 */
-	for (;;)
-	{
+	for (;;) {
 		/*
 		 * Reset the per-output-tuple exprcontext.  This is needed because
 		 * triggers expect to use that context as workspace.  It's a bit ugly
@@ -772,8 +725,7 @@ ExecModifyTable(PlanState *pstate)
 		 * junk column that gives the OID of the rel from which it came.
 		 * Extract it and select the correct result relation.
 		 */
-		if (AttributeNumberIsValid(node->mt_resultOidAttno))
-		{
+		if (AttributeNumberIsValid(node->mt_resultOidAttno)) {
 			Datum datum;
 			bool isNull;
 			Oid resultoid;
@@ -792,8 +744,7 @@ ExecModifyTable(PlanState *pstate)
 		 * If resultRelInfo->ri_usesFdwDirectModify is true, all we need to do
 		 * here is compute the RETURNING expressions.
 		 */
-		if (resultRelInfo->ri_usesFdwDirectModify)
-		{
+		if (resultRelInfo->ri_usesFdwDirectModify) {
 			Assert(resultRelInfo->ri_projectReturning);
 
 			/*
@@ -820,8 +771,7 @@ ExecModifyTable(PlanState *pstate)
 		 * Keep this in step with the part of ExecInitModifyTable that sets up
 		 * ri_RowIdAttNo.
 		 */
-		if (operation == CMD_UPDATE || operation == CMD_DELETE)
-		{
+		if (operation == CMD_UPDATE || operation == CMD_DELETE) {
 			char relkind;
 			Datum datum;
 			bool isNull;
@@ -831,8 +781,7 @@ ExecModifyTable(PlanState *pstate)
 			Assert(relkind == RELKIND_RELATION);
 
 			if (relkind == RELKIND_RELATION || relkind == RELKIND_MATVIEW ||
-				relkind == RELKIND_PARTITIONED_TABLE)
-			{
+				relkind == RELKIND_PARTITIONED_TABLE) {
 				/* ri_RowIdAttNo refers to a ctid attribute */
 				Assert(AttributeNumberIsValid(resultRelInfo->ri_RowIdAttNo));
 				datum = ExecGetJunkAttribute(slot, resultRelInfo->ri_RowIdAttNo, &isNull);
@@ -861,8 +810,7 @@ ExecModifyTable(PlanState *pstate)
 			 * Other relevant relkinds, currently limited to views, always
 			 * have a wholerow attribute.
 			 */
-			else if (AttributeNumberIsValid(resultRelInfo->ri_RowIdAttNo))
-			{
+			else if (AttributeNumberIsValid(resultRelInfo->ri_RowIdAttNo)) {
 				datum = ExecGetJunkAttribute(slot, resultRelInfo->ri_RowIdAttNo, &isNull);
 				/* shouldn't ever get a null result... */
 				if (isNull)
@@ -877,16 +825,13 @@ ExecModifyTable(PlanState *pstate)
 											RelationGetRelid(resultRelInfo->ri_RelationDesc);
 
 				oldtuple = &oldtupdata;
-			}
-			else
-			{
+			} else {
 				/* Only foreign tables are allowed to omit a row-ID attr */
 				Assert(relkind == RELKIND_FOREIGN_TABLE);
 			}
 		}
 
-		switch (operation)
-		{
+		switch (operation) {
 			case CMD_INSERT:
 				/* Initialize projection info if first time for this table */
 				if (unlikely(!resultRelInfo->ri_projectNewInfoValid))
@@ -904,13 +849,10 @@ ExecModifyTable(PlanState *pstate)
 				 * the old tuple being updated.
 				 */
 				oldSlot = resultRelInfo->ri_oldTupleSlot;
-				if (oldtuple != NULL)
-				{
+				if (oldtuple != NULL) {
 					/* Use the wholerow junk attr as the old tuple. */
 					ExecForceStoreHeapTuple(oldtuple, oldSlot, false);
-				}
-				else
-				{
+				} else {
 					/* Fetch the most recent version of old tuple. */
 					Relation relation = resultRelInfo->ri_RelationDesc;
 
@@ -963,8 +905,7 @@ ExecModifyTable(PlanState *pstate)
 	 */
 	relinfos = estate->es_opened_result_relations;
 
-	foreach (lc, relinfos)
-	{
+	foreach (lc, relinfos) {
 		resultRelInfo = lfirst(lc);
 		if (resultRelInfo->ri_NumSlots > 0)
 			ExecBatchInsert(node,
@@ -992,13 +933,11 @@ ExecModifyTable(PlanState *pstate)
  * copied verbatim from executor/nodeModifyTable.c
  */
 static void
-fireBSTriggers(ModifyTableState *node)
-{
+fireBSTriggers(ModifyTableState *node) {
 	ModifyTable *plan = (ModifyTable *) node->ps.plan;
 	ResultRelInfo *resultRelInfo = node->rootResultRelInfo;
 
-	switch (node->operation)
-	{
+	switch (node->operation) {
 		case CMD_INSERT:
 			ExecBSInsertTriggers(node->ps.state, resultRelInfo);
 			if (plan->onConflictAction == ONCONFLICT_UPDATE)
@@ -1022,13 +961,11 @@ fireBSTriggers(ModifyTableState *node)
  * copied verbatim from executor/nodeModifyTable.c
  */
 static void
-fireASTriggers(ModifyTableState *node)
-{
+fireASTriggers(ModifyTableState *node) {
 	ModifyTable *plan = (ModifyTable *) node->ps.plan;
 	ResultRelInfo *resultRelInfo = node->rootResultRelInfo;
 
-	switch (node->operation)
-	{
+	switch (node->operation) {
 		case CMD_INSERT:
 			if (plan->onConflictAction == ONCONFLICT_UPDATE)
 				ExecASUpdateTriggers(node->ps.state, resultRelInfo, node->mt_oc_transition_capture);
@@ -1062,8 +999,7 @@ fireASTriggers(ModifyTableState *node)
  */
 static TupleTableSlot *
 ExecProcessReturning(ResultRelInfo *resultRelInfo, TupleTableSlot *tupleSlot,
-					 TupleTableSlot *planSlot)
-{
+					 TupleTableSlot *planSlot) {
 	ProjectionInfo *projectReturning = resultRelInfo->ri_projectReturning;
 	ExprContext *econtext = projectReturning->pi_exprContext;
 
@@ -1094,8 +1030,7 @@ ExecProcessReturning(ResultRelInfo *resultRelInfo, TupleTableSlot *tupleSlot,
  * copied verbatim from executor/nodeModifyTable.c
  */
 static void
-ExecInitInsertProjection(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo)
-{
+ExecInitInsertProjection(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo) {
 	ModifyTable *node = (ModifyTable *) mtstate->ps.plan;
 	Plan *subplan = outerPlan(node);
 	EState *estate = mtstate->ps.state;
@@ -1104,8 +1039,7 @@ ExecInitInsertProjection(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo
 	ListCell *l;
 
 	/* Extract non-junk columns of the subplan's result tlist. */
-	foreach (l, subplan->targetlist)
-	{
+	foreach (l, subplan->targetlist) {
 		TargetEntry *tle = (TargetEntry *) lfirst(l);
 
 		if (!tle->resjunk)
@@ -1125,8 +1059,7 @@ ExecInitInsertProjection(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo
 		table_slot_create(resultRelInfo->ri_RelationDesc, &estate->es_tupleTable);
 
 	/* Build ProjectionInfo if needed (it probably isn't). */
-	if (need_projection)
-	{
+	if (need_projection) {
 		TupleDesc relDesc = RelationGetDescr(resultRelInfo->ri_RelationDesc);
 
 		/* need an expression context to do the projection */
@@ -1163,8 +1096,7 @@ ExecInitInsertProjection(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo
  * copied verbatim from executor/nodeModifyTable.c
  */
 static void
-ExecInitUpdateProjection(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo)
-{
+ExecInitUpdateProjection(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo) {
 	ModifyTable *node = (ModifyTable *) mtstate->ps.plan;
 	Plan *subplan = outerPlan(node);
 	EState *estate = mtstate->ps.state;
@@ -1177,8 +1109,7 @@ ExecInitUpdateProjection(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo
 	 * to, we can get the index the hard way with an integer division.
 	 */
 	whichrel = mtstate->mt_lastResultIndex;
-	if (resultRelInfo != mtstate->resultRelInfo + whichrel)
-	{
+	if (resultRelInfo != mtstate->resultRelInfo + whichrel) {
 		whichrel = resultRelInfo - mtstate->resultRelInfo;
 		Assert(whichrel >= 0 && whichrel < mtstate->mt_nrels);
 	}
@@ -1228,14 +1159,12 @@ ExecInitUpdateProjection(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo
  * copied verbatim from executor/nodeModifyTable.c
  */
 static void
-ExecCheckPlanOutput(Relation resultRel, List *targetList)
-{
+ExecCheckPlanOutput(Relation resultRel, List *targetList) {
 	TupleDesc resultDesc = RelationGetDescr(resultRel);
 	int attno = 0;
 	ListCell *lc;
 
-	foreach (lc, targetList)
-	{
+	foreach (lc, targetList) {
 		TargetEntry *tle = (TargetEntry *) lfirst(lc);
 		Form_pg_attribute attr;
 
@@ -1249,8 +1178,7 @@ ExecCheckPlanOutput(Relation resultRel, List *targetList)
 		attr = TupleDescAttr(resultDesc, attno);
 		attno++;
 
-		if (!attr->attisdropped)
-		{
+		if (!attr->attisdropped) {
 			/* Normal case: demand type match */
 			if (exprType((Node *) tle->expr) != attr->atttypid)
 				ereport(ERROR,
@@ -1261,9 +1189,7 @@ ExecCheckPlanOutput(Relation resultRel, List *targetList)
 								   format_type_be(attr->atttypid),
 								   attno,
 								   format_type_be(exprType((Node *) tle->expr)))));
-		}
-		else
-		{
+		} else {
 			/*
 			 * For a dropped column, we can't check atttypid (it's likely 0).
 			 * In any case the planner has most likely inserted an INT4 null.
@@ -1294,8 +1220,7 @@ ExecCheckPlanOutput(Relation resultRel, List *targetList)
  * copied verbatim from executor/nodeModifyTable.c
  */
 static TupleTableSlot *
-ExecGetInsertNewTuple(ResultRelInfo *relinfo, TupleTableSlot *planSlot)
-{
+ExecGetInsertNewTuple(ResultRelInfo *relinfo, TupleTableSlot *planSlot) {
 	ProjectionInfo *newProj = relinfo->ri_projectNew;
 	ExprContext *econtext;
 
@@ -1304,14 +1229,11 @@ ExecGetInsertNewTuple(ResultRelInfo *relinfo, TupleTableSlot *planSlot)
 	 * right type for the target rel.  If the planSlot is the right type we
 	 * can use it as-is, else copy the data into ri_newTupleSlot.
 	 */
-	if (newProj == NULL)
-	{
-		if (relinfo->ri_newTupleSlot->tts_ops != planSlot->tts_ops)
-		{
+	if (newProj == NULL) {
+		if (relinfo->ri_newTupleSlot->tts_ops != planSlot->tts_ops) {
 			ExecCopySlot(relinfo->ri_newTupleSlot, planSlot);
 			return relinfo->ri_newTupleSlot;
-		}
-		else
+		} else
 			return planSlot;
 	}
 
@@ -1349,8 +1271,7 @@ ExecGetInsertNewTuple(ResultRelInfo *relinfo, TupleTableSlot *planSlot)
  */
 static TupleTableSlot *
 ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSlot *slot,
-		   TupleTableSlot *planSlot, EState *estate, bool canSetTag)
-{
+		   TupleTableSlot *planSlot, EState *estate, bool canSetTag) {
 	Relation resultRelationDesc;
 	List *recheckIndexes = NIL;
 	TupleTableSlot *result = NULL;
@@ -1381,20 +1302,16 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 	 * values to insert.  Also, they can run arbitrary user-defined code with
 	 * side-effects that we can't cancel by just not inserting the tuple.
 	 */
-	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_insert_before_row)
-	{
+	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_insert_before_row) {
 		if (!ExecBRInsertTriggers(estate, resultRelInfo, slot))
 			return NULL; /* "do nothing" */
 	}
 
 	/* INSTEAD OF ROW INSERT Triggers */
-	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_insert_instead_row)
-	{
+	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_insert_instead_row) {
 		if (!ExecIRInsertTriggers(estate, resultRelInfo, slot))
 			return NULL; /* "do nothing" */
-	}
-	else if (resultRelInfo->ri_FdwRoutine)
-	{
+	} else if (resultRelInfo->ri_FdwRoutine) {
 		/*
 		 * GENERATED expressions might reference the tableoid column, so
 		 * (re-)initialize tts_tableOid before evaluating them.
@@ -1412,15 +1329,13 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 		 * If the FDW supports batching, and batching is requested, accumulate
 		 * rows and insert them in batches. Otherwise use the per-row inserts.
 		 */
-		if (resultRelInfo->ri_BatchSize > 1)
-		{
+		if (resultRelInfo->ri_BatchSize > 1) {
 			/*
 			 * If a certain number of tuples have already been accumulated, or
 			 * a tuple has come for a different relation than that for the
 			 * accumulated tuples, perform the batch insert
 			 */
-			if (resultRelInfo->ri_NumSlots == resultRelInfo->ri_BatchSize)
-			{
+			if (resultRelInfo->ri_NumSlots == resultRelInfo->ri_BatchSize) {
 				ExecBatchInsert(mtstate,
 								resultRelInfo,
 								resultRelInfo->ri_Slots,
@@ -1433,8 +1348,7 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 
 			oldContext = MemoryContextSwitchTo(estate->es_query_cxt);
 
-			if (resultRelInfo->ri_Slots == NULL)
-			{
+			if (resultRelInfo->ri_Slots == NULL) {
 				resultRelInfo->ri_Slots =
 					palloc(sizeof(TupleTableSlot *) * resultRelInfo->ri_BatchSize);
 				resultRelInfo->ri_PlanSlots =
@@ -1449,8 +1363,7 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 			 * many slots all referencing the same tuple descriptor) we copy
 			 * the appropriate tuple descriptor for each slot.
 			 */
-			if (resultRelInfo->ri_NumSlots >= resultRelInfo->ri_NumSlotsInitialized)
-			{
+			if (resultRelInfo->ri_NumSlots >= resultRelInfo->ri_NumSlotsInitialized) {
 				TupleDesc tdesc = CreateTupleDescCopy(slot->tts_tupleDescriptor);
 				TupleDesc plan_tdesc = CreateTupleDescCopy(planSlot->tts_tupleDescriptor);
 
@@ -1490,9 +1403,7 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 		 * them.  (This covers the case where the FDW replaced the slot.)
 		 */
 		slot->tts_tableOid = RelationGetRelid(resultRelInfo->ri_RelationDesc);
-	}
-	else
-	{
+	} else {
 		WCOKind wco_kind;
 
 		/*
@@ -1542,8 +1453,7 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 			 (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_insert_before_row)))
 			ExecPartitionCheck(resultRelInfo, slot, estate, true);
 
-		if (onconflict != ONCONFLICT_NONE && resultRelInfo->ri_NumIndices > 0)
-		{
+		if (onconflict != ONCONFLICT_NONE && resultRelInfo->ri_NumIndices > 0) {
 			/* Perform a speculative insertion. */
 			uint32 specToken;
 			ItemPointerData conflictTid;
@@ -1570,11 +1480,9 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 										   slot,
 										   estate,
 										   &conflictTid,
-										   arbiterIndexes))
-			{
+										   arbiterIndexes)) {
 				/* committed conflict tuple found */
-				if (onconflict == ONCONFLICT_UPDATE)
-				{
+				if (onconflict == ONCONFLICT_UPDATE) {
 					/*
 					 * In case of ON CONFLICT DO UPDATE, execute the UPDATE
 					 * part.  Be prepared to retry if the UPDATE fails because
@@ -1590,16 +1498,12 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 											 slot,
 											 estate,
 											 canSetTag,
-											 &returning))
-					{
+											 &returning)) {
 						InstrCountTuples2(&mtstate->ps, 1);
 						return returning;
-					}
-					else
+					} else
 						goto vlock;
-				}
-				else
-				{
+				} else {
 					/*
 					 * In case of ON CONFLICT DO NOTHING, do nothing. However,
 					 * verify that the tuple is visible to the executor's MVCC
@@ -1663,16 +1567,13 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 			 * the pre-check again, which will now find the conflicting tuple
 			 * (unless it aborts before we get there).
 			 */
-			if (specConflict)
-			{
+			if (specConflict) {
 				list_free(recheckIndexes);
 				goto vlock;
 			}
 
 			/* Since there was no insertion conflict, we're done */
-		}
-		else
-		{
+		} else {
 			/* insert the tuple normally */
 			table_tuple_insert(resultRelationDesc, slot, estate->es_output_cid, 0, NULL);
 
@@ -1694,8 +1595,7 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
 	 */
 	ar_insert_trig_tcs = mtstate->mt_transition_capture;
 	if (mtstate->operation == CMD_UPDATE && mtstate->mt_transition_capture &&
-		mtstate->mt_transition_capture->tcs_update_new_table)
-	{
+		mtstate->mt_transition_capture->tcs_update_new_table) {
 		ExecARUpdateTriggers(estate,
 							 resultRelInfo,
 							 NULL,
@@ -1750,8 +1650,7 @@ ExecInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSl
  */
 static void
 ExecBatchInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTableSlot **slots,
-				TupleTableSlot **planSlots, int numSlots, EState *estate, bool canSetTag)
-{
+				TupleTableSlot **planSlots, int numSlots, EState *estate, bool canSetTag) {
 	int i;
 	int numInserted = numSlots;
 	TupleTableSlot *slot = NULL;
@@ -1766,8 +1665,7 @@ ExecBatchInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTa
 																  planSlots,
 																  &numInserted);
 
-	for (i = 0; i < numInserted; i++)
-	{
+	for (i = 0; i < numInserted; i++) {
 		slot = rslots[i];
 
 		/*
@@ -1824,8 +1722,7 @@ ExecBatchInsert(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, TupleTa
 static TupleTableSlot *
 ExecUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer tupleid,
 		   HeapTuple oldtuple, TupleTableSlot *slot, TupleTableSlot *planSlot, EPQState *epqstate,
-		   EState *estate, bool canSetTag)
-{
+		   EState *estate, bool canSetTag) {
 	Relation resultRelationDesc = resultRelInfo->ri_RelationDesc;
 	TM_Result result;
 	TM_FailureData tmfd;
@@ -1841,20 +1738,16 @@ ExecUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 		ExecOpenIndices(resultRelInfo, false);
 
 	/* BEFORE ROW UPDATE Triggers */
-	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_update_before_row)
-	{
+	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_update_before_row) {
 		if (!ExecBRUpdateTriggers(estate, epqstate, resultRelInfo, tupleid, oldtuple, slot))
 			return NULL; /* "do nothing" */
 	}
 
 	/* INSTEAD OF ROW UPDATE Triggers */
-	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_update_instead_row)
-	{
+	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_update_instead_row) {
 		if (!ExecIRUpdateTriggers(estate, resultRelInfo, oldtuple, slot))
 			return NULL; /* "do nothing" */
-	}
-	else if (resultRelInfo->ri_FdwRoutine)
-	{
+	} else if (resultRelInfo->ri_FdwRoutine) {
 		/*
 		 * GENERATED expressions might reference the tableoid column, so
 		 * (re-)initialize tts_tableOid before evaluating them.
@@ -1883,9 +1776,7 @@ ExecUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 		 * them.  (This covers the case where the FDW replaced the slot.)
 		 */
 		slot->tts_tableOid = RelationGetRelid(resultRelationDesc);
-	}
-	else
-	{
+	} else {
 		LockTupleMode lockmode;
 		bool partition_constraint_failed;
 		bool update_indexes;
@@ -1927,8 +1818,7 @@ ExecUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 		partition_constraint_failed = resultRelationDesc->rd_rel->relispartition &&
 									  !ExecPartitionCheck(resultRelInfo, slot, estate, false);
 
-		if (!partition_constraint_failed && resultRelInfo->ri_WithCheckOptions != NIL)
-		{
+		if (!partition_constraint_failed && resultRelInfo->ri_WithCheckOptions != NIL) {
 			/*
 			 * ExecWithCheckOptions() will skip any WCOs which are not of the
 			 * kind we are looking for at this point.
@@ -1940,8 +1830,7 @@ ExecUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 		 * If a partition check failed, try to move the row into the right
 		 * partition.
 		 */
-		if (partition_constraint_failed)
-		{
+		if (partition_constraint_failed) {
 			elog(ERROR, "cross chunk updates not supported");
 		}
 
@@ -1974,8 +1863,7 @@ ExecUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 									&lockmode,
 									&update_indexes);
 
-		switch (result)
-		{
+		switch (result) {
 			case TM_SelfModified:
 
 				/*
@@ -2015,8 +1903,7 @@ ExecUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 			case TM_Ok:
 				break;
 
-			case TM_Updated:
-			{
+			case TM_Updated: {
 				TupleTableSlot *inputslot;
 				TupleTableSlot *epqslot;
 				TupleTableSlot *oldSlot;
@@ -2044,8 +1931,7 @@ ExecUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 										  TUPLE_LOCK_FLAG_FIND_LAST_VERSION,
 										  &tmfd);
 
-				switch (result)
-				{
+				switch (result) {
 					case TM_Ok:
 						Assert(tmfd.traversed);
 
@@ -2176,8 +2062,7 @@ static bool
 ExecOnConflictUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo,
 					 ItemPointer conflictTid, TupleTableSlot *planSlot,
 					 TupleTableSlot *excludedSlot, EState *estate, bool canSetTag,
-					 TupleTableSlot **returning)
-{
+					 TupleTableSlot **returning) {
 	ExprContext *econtext = mtstate->ps.ps_ExprContext;
 	Relation relation = resultRelInfo->ri_RelationDesc;
 	ExprState *onConflictSetWhere = resultRelInfo->ri_onConflict->oc_WhereClause;
@@ -2207,8 +2092,7 @@ ExecOnConflictUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo,
 							LockWaitBlock,
 							0,
 							&tmfd);
-	switch (test)
-	{
+	switch (test) {
 		case TM_Ok:
 			/* success! */
 			break;
@@ -2323,15 +2207,13 @@ ExecOnConflictUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo,
 	econtext->ecxt_innertuple = excludedSlot;
 	econtext->ecxt_outertuple = NULL;
 
-	if (!ExecQual(onConflictSetWhere, econtext))
-	{
+	if (!ExecQual(onConflictSetWhere, econtext)) {
 		ExecClearTuple(existing); /* see return below */
 		InstrCountFiltered1(&mtstate->ps, 1);
 		return true; /* done with the tuple */
 	}
 
-	if (resultRelInfo->ri_WithCheckOptions != NIL)
-	{
+	if (resultRelInfo->ri_WithCheckOptions != NIL) {
 		/*
 		 * Check target's existing tuple against UPDATE-applicable USING
 		 * security barrier quals (if any), enforced here as RLS checks/WCOs.
@@ -2393,13 +2275,11 @@ ExecOnConflictUpdate(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo,
  * copied verbatim from executor/nodeModifyTable.c
  */
 static void
-ExecCheckTupleVisible(EState *estate, Relation rel, TupleTableSlot *slot)
-{
+ExecCheckTupleVisible(EState *estate, Relation rel, TupleTableSlot *slot) {
 	if (!IsolationUsesXactSnapshot())
 		return;
 
-	if (!table_tuple_satisfies_snapshot(rel, slot, estate->es_snapshot))
-	{
+	if (!table_tuple_satisfies_snapshot(rel, slot, estate->es_snapshot)) {
 		Datum xminDatum;
 		TransactionId xmin;
 		bool isnull;
@@ -2428,8 +2308,7 @@ ExecCheckTupleVisible(EState *estate, Relation rel, TupleTableSlot *slot)
  */
 static void
 ExecCheckTIDVisible(EState *estate, ResultRelInfo *relinfo, ItemPointer tid,
-					TupleTableSlot *tempSlot)
-{
+					TupleTableSlot *tempSlot) {
 	Relation rel = relinfo->ri_RelationDesc;
 
 	/* Redundantly check isolation level */
@@ -2470,8 +2349,7 @@ static TupleTableSlot *
 ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer tupleid,
 		   HeapTuple oldtuple, TupleTableSlot *planSlot, EPQState *epqstate, EState *estate,
 		   bool processReturning, bool canSetTag, bool changingPart, bool *tupleDeleted,
-		   TupleTableSlot **epqreturnslot)
-{
+		   TupleTableSlot **epqreturnslot) {
 	Relation resultRelationDesc = resultRelInfo->ri_RelationDesc;
 	TM_Result result;
 	TM_FailureData tmfd;
@@ -2482,8 +2360,7 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 		*tupleDeleted = false;
 
 	/* BEFORE ROW DELETE Triggers */
-	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_delete_before_row)
-	{
+	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_delete_before_row) {
 		bool dodelete;
 
 		dodelete =
@@ -2494,8 +2371,7 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 	}
 
 	/* INSTEAD OF ROW DELETE Triggers */
-	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_delete_instead_row)
-	{
+	if (resultRelInfo->ri_TrigDesc && resultRelInfo->ri_TrigDesc->trig_delete_instead_row) {
 		bool dodelete;
 
 		Assert(oldtuple != NULL);
@@ -2503,9 +2379,7 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 
 		if (!dodelete) /* "do nothing" */
 			return NULL;
-	}
-	else if (resultRelInfo->ri_FdwRoutine)
-	{
+	} else if (resultRelInfo->ri_FdwRoutine) {
 		/*
 		 * delete from foreign table: let the FDW do it
 		 *
@@ -2527,9 +2401,7 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 			ExecStoreAllNullTuple(slot);
 
 		slot->tts_tableOid = RelationGetRelid(resultRelationDesc);
-	}
-	else
-	{
+	} else {
 		/*
 		 * delete the tuple
 		 *
@@ -2540,8 +2412,7 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 		 * mode transactions.
 		 */
 	ldelete:;
-		if (!ItemPointerIsValid(tupleid))
-		{
+		if (!ItemPointerIsValid(tupleid)) {
 			elog(ERROR,
 				 "cannot update/delete rows from chunk \"%s\" as it is compressed",
 				 NameStr(resultRelationDesc->rd_rel->relname));
@@ -2555,8 +2426,7 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 									&tmfd,
 									changingPart);
 
-		switch (result)
-		{
+		switch (result) {
 			case TM_SelfModified:
 
 				/*
@@ -2597,8 +2467,7 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 			case TM_Ok:
 				break;
 
-			case TM_Updated:
-			{
+			case TM_Updated: {
 				TupleTableSlot *inputslot;
 				TupleTableSlot *epqslot;
 
@@ -2626,8 +2495,7 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 										  TUPLE_LOCK_FLAG_FIND_LAST_VERSION,
 										  &tmfd);
 
-				switch (result)
-				{
+				switch (result) {
 					case TM_Ok:
 						Assert(tmfd.traversed);
 						epqslot = EvalPlanQual(epqstate,
@@ -2642,12 +2510,10 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 						 * If requested, skip delete and pass back the
 						 * updated row.
 						 */
-						if (epqreturnslot)
-						{
+						if (epqreturnslot) {
 							*epqreturnslot = epqslot;
 							return NULL;
-						}
-						else
+						} else
 							goto ldelete;
 
 					case TM_SelfModified:
@@ -2734,8 +2600,7 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 	 */
 	ar_delete_trig_tcs = mtstate->mt_transition_capture;
 	if (mtstate->operation == CMD_UPDATE && mtstate->mt_transition_capture &&
-		mtstate->mt_transition_capture->tcs_update_old_table)
-	{
+		mtstate->mt_transition_capture->tcs_update_old_table) {
 		ExecARUpdateTriggers(estate,
 							 resultRelInfo,
 							 tupleid,
@@ -2755,28 +2620,21 @@ ExecDelete(ModifyTableState *mtstate, ResultRelInfo *resultRelInfo, ItemPointer 
 	ExecARDeleteTriggers(estate, resultRelInfo, tupleid, oldtuple, ar_delete_trig_tcs);
 
 	/* Process RETURNING if present and if requested */
-	if (processReturning && resultRelInfo->ri_projectReturning)
-	{
+	if (processReturning && resultRelInfo->ri_projectReturning) {
 		/*
 		 * We have to put the target tuple into a slot, which means first we
 		 * gotta fetch it.  We can use the trigger tuple slot.
 		 */
 		TupleTableSlot *rslot;
 
-		if (resultRelInfo->ri_FdwRoutine)
-		{
+		if (resultRelInfo->ri_FdwRoutine) {
 			/* FDW must have provided a slot containing the deleted row */
 			Assert(!TupIsNull(slot));
-		}
-		else
-		{
+		} else {
 			slot = ExecGetReturningSlot(estate, resultRelInfo);
-			if (oldtuple != NULL)
-			{
+			if (oldtuple != NULL) {
 				ExecForceStoreHeapTuple(oldtuple, slot, false);
-			}
-			else
-			{
+			} else {
 				if (!table_tuple_fetch_row_version(resultRelationDesc, tupleid, SnapshotAny, slot))
 					elog(ERROR, "failed to fetch deleted tuple for DELETE RETURNING");
 			}

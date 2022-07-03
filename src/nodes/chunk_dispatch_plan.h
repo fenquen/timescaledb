@@ -13,15 +13,16 @@
 
 #include "export.h"
 
-typedef struct ChunkDispatchPath
-{
+typedef struct ChunkDispatchPath {
 	CustomPath cpath;
 	ModifyTablePath *mtpath;
 	Index hypertable_rti;
-	Oid hypertable_relid;
+	Oid hypertable_relid; // 应该是原表的oid
 } ChunkDispatchPath;
 
-extern TSDLLEXPORT Path *ts_chunk_dispatch_path_create(PlannerInfo *root, ModifyTablePath *mtpath,
-													   Index hypertable_rti, int subpath_index);
+extern TSDLLEXPORT Path *ts_chunk_dispatch_path_create(PlannerInfo *root,
+													   ModifyTablePath *modifyTablePath,
+													   Index hypertable_rti,
+													   int subpath_index);
 
 #endif /* TIMESCALEDB_CHUNK_DISPATCH_PLAN_H */

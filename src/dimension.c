@@ -836,12 +836,12 @@ Datum ts_dimension_transform_value(const Dimension *dim, Oid collation, Datum va
 }
 
 static Point *point_create(int16 num_dimensions) {
-	Point *p = palloc0(POINT_SIZE(num_dimensions));
+	Point *point = palloc0(POINT_SIZE(num_dimensions));
 
-	p->cardinality = num_dimensions;
-	p->num_coords = 0;
+	point->cardinality = num_dimensions;
+	point->num_coords = 0;
 
-	return p;
+	return point;
 }
 
 TSDLLEXPORT Point *ts_hyperspace_calculate_point(const Hyperspace *hyperspace,

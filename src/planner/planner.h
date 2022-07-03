@@ -19,8 +19,7 @@
 
 typedef struct Chunk Chunk;
 typedef struct TsFdwRelInfo TsFdwRelInfo;
-typedef struct TimescaleDBPrivate
-{
+typedef struct TimescaleDBPrivate {
 	bool appends_ordered;
 	/* attno of the time dimension in the parent table if appends are ordered */
 	int order_attno;
@@ -42,16 +41,14 @@ extern TSDLLEXPORT bool ts_contain_param(Node *node);
 extern TSDLLEXPORT DataFetcherType ts_data_node_fetcher_scan_type;
 
 static inline TimescaleDBPrivate *
-ts_create_private_reloptinfo(RelOptInfo *rel)
-{
+ts_create_private_reloptinfo(RelOptInfo *rel) {
 	Assert(rel->fdw_private == NULL);
 	rel->fdw_private = palloc0(sizeof(TimescaleDBPrivate));
 	return rel->fdw_private;
 }
 
 static inline TimescaleDBPrivate *
-ts_get_private_reloptinfo(RelOptInfo *rel)
-{
+ts_get_private_reloptinfo(RelOptInfo *rel) {
 	/* If rel->fdw_private is not set up here it means the rel got missclassified
 	 * and did not get expanded by our code but by postgres native code.
 	 * This is not a problem by itself, but probably an oversight on our part.
@@ -64,8 +61,7 @@ ts_get_private_reloptinfo(RelOptInfo *rel)
  * TsRelType provides consistent classification of planned relations across
  * planner hooks.
  */
-typedef enum TsRelType
-{
+typedef enum TsRelType {
 	TS_REL_HYPERTABLE,		 /* A hypertable with no parent */
 	TS_REL_CHUNK,			 /* Chunk with no parent (i.e., it's part of the
 							  * plan as a standalone table. For example,
@@ -80,8 +76,7 @@ typedef enum TsRelType
 	TS_REL_OTHER,			 /* Anything which is none of the above */
 } TsRelType;
 
-typedef enum PartializeAggFixAggref
-{
+typedef enum PartializeAggFixAggref {
 	TS_DO_NOT_FIX_AGGREF = 0,
 	TS_FIX_AGGREF = 1
 } PartializeAggFixAggref;

@@ -1197,15 +1197,15 @@ involves_hypertable(PlannerInfo *root, RelOptInfo *rel) {
  * a list of one or more subplans, much like an Append node.  There
  * is one subplan per result relation."
  *
- * The subplans produce the tuples for INSERT, while the result relation is the
- * table we'd like to insert into.
+ * The subplans produce the tuples for INSERT, while the result relation 是
+ * 要insert的表.
  *
  * The way we redirect tuples to chunks is to insert an intermediate "chunk
- * dispatch" plan node, between the ModifyTable and its subplan that produces
+ * dispatch" plan node, between the ModifyTable and its sub plan that produces
  * the tuples. When the ModifyTable plan is executed, it tries to read a tuple
  * from the intermediate chunk dispatch plan instead of the original
- * subplan. The chunk plan reads the tuple from the original subplan, looks up
- * the chunk, sets the executor's resultRelation to the chunk table and finally
+ * sub plan. The chunk plan reads the tuple from the original sub plan, looks up
+ * right chunk, sets the executor's resultRelation to the right chunk table and finally
  * returns the tuple to the ModifyTable node.
  *
  * We also need to wrap the ModifyTable plan node with a HypertableInsert node
@@ -1218,7 +1218,7 @@ involves_hypertable(PlannerInfo *root, RelOptInfo *rel) {
  *
  *		  ^
  *		  |
- *	[ ModifyTable ] -> resultRelation
+ *	[ ModifyTable ] -> resultRelation 要insert的目标表
  *		  ^
  *		  | Tuple
  *		  |
@@ -1232,7 +1232,7 @@ involves_hypertable(PlannerInfo *root, RelOptInfo *rel) {
  *		  |
  *	[ ModifyTable ] -> resultRelation
  *		  ^			   ^
- *		  | Tuple	  / <Set resultRelation to the matching chunk table>
+ *		  | Tuple	  / <set resultRelation to the matching chunk table>
  *		  |			 /
  * [ ChunkDispatch ]
  *		  ^
@@ -1240,20 +1240,21 @@ involves_hypertable(PlannerInfo *root, RelOptInfo *rel) {
  *		  |
  *	  [ subplan ]
  *
- * For PG < 14, the modifytable plan is modified for INSERTs only.
- * For PG14+, we modify the plan for DELETEs as well.
+ * For PG < 14, the modify table plan is modified for INSERT only.
+ * For PG14+, we modify the plan for DELETE as well.
  *
  */
-static List *
-replace_hypertable_modify_paths(PlannerInfo *root, List *pathlist, RelOptInfo *input_rel) {
-	List *new_pathlist = NIL;
+static List *replace_hypertable_modify_paths(PlannerInfo *root,
+											 List *subPathList,
+											 RelOptInfo *input_rel) {
+	List *newPathlist = NIL;
 	ListCell *lc;
 
-	foreach (lc, pathlist) {
-		Path *path = lfirst(lc);
+	foreach (lc, subPathList) {
+		Path *subPath = lfirst(lc);
 
-		if (IsA(path, ModifyTablePath)) {
-			ModifyTablePath *modifyTablePath = castNode(ModifyTablePath, path);
+		if (IsA(subPath, ModifyTablePath)) { // 找到这些subpath中的modifyTablePath
+			ModifyTablePath *modifyTablePath = castNode(ModifyTablePath, subPath);
 
 #if PG14_GE
 			/* We only route UPDATE/DELETE through our CustomNode for PG 14+ because
@@ -1264,49 +1265,52 @@ replace_hypertable_modify_paths(PlannerInfo *root, List *pathlist, RelOptInfo *i
 			if (modifyTablePath->operation == CMD_INSERT)
 #endif
 			{
-				RangeTblEntry *rte = planner_rt_fetch(modifyTablePath->nominalRelation, root); // 得到了原始的目标表
-				Hypertable *hypertable = ts_planner_get_hypertable(rte->relid, CACHE_FLAG_CHECK); // 得到对应hyper table记录
+				RangeTblEntry *rte = planner_rt_fetch(modifyTablePath->nominalRelation, root);	  // 得到了原始的目标表
+				Hypertable *hypertable = ts_planner_get_hypertable(rte->relid, CACHE_FLAG_CHECK); // relid对应的是原表得到对应hyper table记录 要是该原表未hyper化得到的是null
 
 				if (hypertable && (modifyTablePath->operation == CMD_INSERT || !hypertable_is_distributed(hypertable))) {
-					path = ts_hypertable_modify_path_create(root, modifyTablePath, hypertable, input_rel);
+					subPath = ts_hypertable_modify_path_create(root, modifyTablePath, hypertable, input_rel);
 				}
 			}
 		}
 
-		new_pathlist = lappend(new_pathlist, path);
+		newPathlist = lappend(newPathlist, subPath);
 	}
 
-	return new_pathlist;
+	return newPathlist;
 }
 
 static void timescaledb_create_upper_paths_hook(PlannerInfo *root,
 												UpperRelationKind stage,
-												RelOptInfo *input_rel,
-												RelOptInfo *output_rel,
+												RelOptInfo *input_rel, // rtekind属性 RTE_RESULT
+												RelOptInfo *output_rel,// rtekind属性 RTE_RELATION
 												void *extra) {
 	Query *parse = root->parse;
 	bool partials_found = false;
 	TsRelType reltype = TS_REL_OTHER;
-	Hypertable *ht = NULL;
+	Hypertable *hyperTable = NULL;
 
-	if (prev_create_upper_paths_hook != NULL)
+	if (prev_create_upper_paths_hook != NULL) {
 		prev_create_upper_paths_hook(root, stage, input_rel, output_rel, extra);
+	}
 
-	if (!ts_extension_is_loaded())
+	if (!ts_extension_is_loaded()) { //  select * from aiot where  "time" >= '2022-06-25' and "time" < '2022-07-01'
 		return;
+	}
 
-	if (input_rel != NULL)
-		reltype = classify_relation(root, input_rel, &ht);
+	if (input_rel != NULL) {
+		reltype = classify_relation(root, input_rel, &hyperTable);
+	}
 
-	if (ts_cm_functions->create_upper_paths_hook != NULL)
-		ts_cm_functions
-			->create_upper_paths_hook(root, stage, input_rel, output_rel, reltype, ht, extra);
+	if (ts_cm_functions->create_upper_paths_hook != NULL) { // tsl_create_upper_paths_hook
+		ts_cm_functions->create_upper_paths_hook(root, stage, input_rel, output_rel, reltype, hyperTable, extra);
+	}
 
 	if (output_rel != NULL) {
-		/* Modify for INSERTs on a hypertable */
-		if (output_rel->pathlist != NIL)
-			output_rel->pathlist =
-				replace_hypertable_modify_paths(root, output_rel->pathlist, input_rel);
+		/* Modify for INSERTs on a hypertable 会去篡改原来的inert链路 */
+		if (output_rel->pathlist != NIL) {
+			output_rel->pathlist = replace_hypertable_modify_paths(root, output_rel->pathlist, input_rel);
+		}
 
 		if (parse->hasAggs && stage == UPPERREL_GROUP_AGG) {
 			/* Existing AggPaths are modified here.

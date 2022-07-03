@@ -986,11 +986,9 @@ ts_hypertable_get_by_id(int32 hypertable_id) {
 }
 
 /*
- * Add the chunk to the cache that allows fast lookup of chunks
- * for a given hyperspace Point.
+ * Add the chunk to the cache that allows fast lookup of chunks for a given hyperspace Point.
  */
-static Chunk *
-hypertable_chunk_store_add(const Hypertable *h, const Chunk *input_chunk) {
+static Chunk *hypertable_chunk_store_add(const Hypertable *h, const Chunk *input_chunk) {
 	MemoryContext old_mcxt;
 
 	/* Add the chunk to the subspace store */
@@ -1007,8 +1005,8 @@ hypertable_chunk_store_add(const Hypertable *h, const Chunk *input_chunk) {
 
 static inline Chunk *hypertable_get_chunk(const Hypertable *hypertable,
 										  const Point *point,
-										  bool create_if_not_exists,
-										  bool lock_chunk_slices) {
+										  bool createIfNotExists,
+										  bool lockChunkSlices) {
 	Chunk *chunk = ts_subspace_store_get(hypertable->chunk_cache, point);
 
 	if (chunk != NULL) {
@@ -1020,12 +1018,14 @@ static inline Chunk *hypertable_get_chunk(const Hypertable *hypertable,
 	 * allocates a lot of transient data. We don't want this allocated on
 	 * the cache's memory context.
 	 */
-	chunk = ts_chunk_find(hypertable, point, lock_chunk_slices);
+	chunk = ts_chunk_find(hypertable, point, lockChunkSlices);
 
 	if (NULL == chunk) {
-		if (!create_if_not_exists)
+		if (!createIfNotExists) {
 			return NULL;
+		}
 
+		// 创建对应chunk的表
 		chunk = ts_chunk_create_from_point(hypertable,
 										   point,
 										   NameStr(hypertable->fd.associated_schema_name),
@@ -1624,7 +1624,7 @@ TS_FUNCTION_INFO_V1(ts_hypertable_distributed_create);
  * 0 relation              REGCLASS
  * 1 time_column_name        NAME
  * 2 partitioning_column     NAME = NULL
- * 3 number_partitions       INTEGER = NULL
+ * 3 number_partitions()       INTEGER = NULL 要是指明了partitioning_column这个要写
  * 4 associated_schema_name  NAME = NULL
  * 5 associated_table_prefix NAME = NULL
  * 6 chunk_time_interval     anyelement = NULL::BIGINT

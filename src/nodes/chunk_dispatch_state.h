@@ -18,7 +18,7 @@ typedef struct ChunkDispatchState {
 	CustomScanState cscan_state;
 	Plan *subplan;
 	Cache *hypertable_cache;
-	Oid hypertable_relid; // 本尊
+	Oid hypertable_relid; // 原表
 	List *arbiter_indexes;
 	/*
 	 * Keep a pointer to the parent ModifyTableState executor node since we need
@@ -31,11 +31,11 @@ typedef struct ChunkDispatchState {
 	 * relations) for each chunk.
 	 */
 	ChunkDispatch *dispatch;
-	ResultRelInfo *rri;
+	ResultRelInfo *rri; // 执行chunk的resultRelInfo 这个属性都用在了data node
 } ChunkDispatchState;
 
 extern bool ts_is_chunk_dispatch_state(PlanState *state);
-extern ChunkDispatchState *ts_chunk_dispatch_state_create(Oid hypertable_oid, Plan *plan);
+extern ChunkDispatchState *ts_chunk_dispatch_state_create(Oid originalTableOid, Plan *subPlan);
 extern void ts_chunk_dispatch_state_set_parent(ChunkDispatchState *state, ModifyTableState *parent);
 
 #endif /* TIMESCALEDB_CHUNK_DISPATCH_STATE_H */

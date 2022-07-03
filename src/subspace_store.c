@@ -30,13 +30,12 @@ typedef struct SubspaceStoreInternalNode {
 typedef struct SubspaceStore {
 	MemoryContext mcxt;
 	int16 num_dimensions;
-	/* limit growth of store by  limiting number of slices in first dimension,	0 for no limit */
+	/* limit growth of store by  limiting number of slices in first dimension,	0 as no limit */
 	int16 max_items;
 	SubspaceStoreInternalNode *origin; /* origin of the tree */
 } SubspaceStore;
 
-static inline SubspaceStoreInternalNode *
-subspace_store_internal_node_create(bool last_internal_node) {
+static inline SubspaceStoreInternalNode *subspace_store_internal_node_create(bool last_internal_node) {
 	SubspaceStoreInternalNode *node = palloc(sizeof(SubspaceStoreInternalNode));
 
 	node->vector = ts_dimension_vec_create(DIMENSION_VEC_DEFAULT_SIZE);
@@ -64,24 +63,26 @@ subspace_store_internal_node_descendants(SubspaceStoreInternalNode *node, int in
 	return ((SubspaceStoreInternalNode *) slice->storage)->descendants;
 }
 
-SubspaceStore *
-ts_subspace_store_init(const Hyperspace *space, MemoryContext mcxt, int16 max_items) {
+SubspaceStore *ts_subspace_store_init(const Hyperspace *hyperspace,
+									  MemoryContext mcxt,
+									  int16 max_items) {
 	MemoryContext old = MemoryContextSwitchTo(mcxt);
-	SubspaceStore *sst = palloc(sizeof(SubspaceStore));
+	SubspaceStore *subSpaceStore = palloc(sizeof(SubspaceStore));
 
 	/*
 	 * make sure that the first dimension is a time dimension, otherwise the
 	 * tree will grow in a way that makes pruning less effective.
 	 */
-	Assert(space->num_dimensions < 1 || space->dimensions[0].type == DIMENSION_TYPE_OPEN);
+	Assert(hyperspace->num_dimensions < 1 || hyperspace->dimensions[0].type == DIMENSION_TYPE_OPEN);
 
-	sst->origin = subspace_store_internal_node_create(space->num_dimensions == 1);
-	sst->num_dimensions = space->num_dimensions;
-	/* max_items = 0 is treated as unlimited */
-	sst->max_items = max_items;
-	sst->mcxt = mcxt;
+	subSpaceStore->origin = subspace_store_internal_node_create(hyperspace->num_dimensions == 1);
+	subSpaceStore->num_dimensions = hyperspace->num_dimensions;
+	subSpaceStore->max_items = max_items;
+	subSpaceStore->mcxt = mcxt;
+
 	MemoryContextSwitchTo(old);
-	return sst;
+
+	return subSpaceStore;
 }
 
 // 得到对应dimension slice

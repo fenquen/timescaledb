@@ -1917,8 +1917,9 @@ static Chunk *chunk_find(const Hypertable *hypertable,
 	return chunk;
 }
 
-Chunk *
-ts_chunk_find(const Hypertable *ht, const Point *p, bool lock_slices) {
+Chunk *ts_chunk_find(const Hypertable *ht,
+					 const Point *p,
+					 bool lock_slices) {
 	return chunk_find(ht, p, false, lock_slices);
 }
 

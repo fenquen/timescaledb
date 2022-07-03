@@ -61,7 +61,7 @@ typedef struct Point {
 	int16 cardinality; // 基数
 	uint8 num_coords;
 	/* Open dimension coordinates are stored before the closed coordinates */
-	int64 coordinates[FLEXIBLE_ARRAY_MEMBER];
+	int64 coordinates[FLEXIBLE_ARRAY_MEMBER]; // 对应了各个维度上的value
 } Point;
 
 #define POINT_SIZE(cardinality) (sizeof(Point) + (sizeof(int64) * (cardinality)))

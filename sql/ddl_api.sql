@@ -7,7 +7,7 @@
 --
 -- relation - The OID of the table to be converted
 -- time_column_name - Name of the column that contains time for a given record
--- partitioning_column - Name of the column to partition data by
+-- partitioning_column - Name of the column to partition data by 其实是space column
 -- number_partitions - (Optional) Number of partitions for data
 -- associated_schema_name - (Optional) Schema for internal hypertable tables
 -- associated_table_prefix - (Optional) Prefix for internal hypertable table names

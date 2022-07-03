@@ -41,8 +41,7 @@
 #define TUPSTORE_MEMSIZE_KB work_mem
 #define TUPSTORE_FLUSH_THRESHOLD ts_guc_max_insert_batch_size
 
-typedef struct DataNodeDispatchPath
-{
+typedef struct DataNodeDispatchPath {
 	CustomPath cpath;
 	ModifyTablePath *mtpath;
 	Index hypertable_rti; /* range table index of Hypertable */
@@ -139,8 +138,7 @@ typedef struct DataNodeDispatchPath
  * - Binary instead of text format. Send tuples in binary format instead of
  *   text to save bandwidth and reduce latency.
  */
-typedef enum DispatchState
-{
+typedef enum DispatchState {
 	SD_READ,
 	SD_FLUSH,
 	SD_LAST_FLUSH,
@@ -148,27 +146,26 @@ typedef enum DispatchState
 	SD_DONE,
 } DispatchState;
 
-typedef struct DataNodeDispatchState
-{
+typedef struct DataNodeDispatchState {
 	CustomScanState cstate;
 	DispatchState prevstate; /* Previous state in state machine */
 	DispatchState state;	 /* Current state in state machine */
 	Relation rel;			 /* The (local) relation we're inserting into */
 	bool set_processed;		 /* Indicates whether to set the number or processed tuples */
 	DeparsedInsertStmt stmt; /* Partially deparsed insert statement */
-	const char *sql_stmt;	/* Fully deparsed insert statement */
+	const char *sql_stmt;	 /* Fully deparsed insert statement */
 	TupleFactory *tupfactory;
-	List *target_attrs;		  /* The attributes to send to remote data nodes */
-	List *responses;		  /* List of responses to process in RETURNING state */
-	HTAB *nodestates;		  /* Hashtable of per-nodestate (tuple stores) */
-	MemoryContext mcxt;		  /* Memory context for per-node state */
-	MemoryContext batch_mcxt; /* Memory context for batches of data */
-	int64 num_tuples;		  /* Total number of tuples flushed each round */
-	int64 next_tuple;		  /* Next tuple to return to the parent node when in
-							   * RETURNING state */
-	int replication_factor;   /* > 1 if we replicate tuples across data nodes */
-	StmtParams *stmt_params;  /* Parameters to send with statement. Format can be binary or text */
-	int flush_threshold;	  /* Batch size used for this dispatch state */
+	List *target_attrs;			/* The attributes to send to remote data nodes */
+	List *responses;			/* List of responses to process in RETURNING state */
+	HTAB *nodestates;			/* Hashtable of per-nodestate (tuple stores) */
+	MemoryContext mcxt;			/* Memory context for per-node state */
+	MemoryContext batch_mcxt;	/* Memory context for batches of data */
+	int64 num_tuples;			/* Total number of tuples flushed each round */
+	int64 next_tuple;			/* Next tuple to return to the parent node when in
+								 * RETURNING state */
+	int replication_factor;		/* > 1 if we replicate tuples across data nodes */
+	StmtParams *stmt_params;	/* Parameters to send with statement. Format can be binary or text */
+	int flush_threshold;		/* Batch size used for this dispatch state */
 	TupleTableSlot *batch_slot; /* Slot used for sending tuples to data
 								 * nodes. Note that this needs to be a
 								 * MinimalTuple slot, so we cannot use the
@@ -180,8 +177,7 @@ typedef struct DataNodeDispatchState
 /*
  * Plan metadata list indexes.
  */
-enum CustomScanPrivateIndex
-{
+enum CustomScanPrivateIndex {
 	CustomScanPrivateSql,
 	CustomScanPrivateTargetAttrs,
 	CustomScanPrivateDeparsedInsertStmt,
@@ -207,8 +203,7 @@ enum CustomScanPrivateIndex
  * Note that, since we use one DataNodeState per connection, we
  * could technically have multiple DataNodeStates per data node.
  */
-typedef struct DataNodeState
-{
+typedef struct DataNodeState {
 	TSConnectionId id; /* Must be first */
 	TSConnection *conn;
 	Tuplestorestate *primary_tupstore; /* Tuples this data node is primary
@@ -225,13 +220,12 @@ typedef struct DataNodeState
 	TupleTableSlot *slot;
 } DataNodeState;
 
-#define NUM_STORED_TUPLES(ss)                                                                      \
-	(tuplestore_tuple_count((ss)->primary_tupstore) +                                              \
+#define NUM_STORED_TUPLES(ss)                         \
+	(tuplestore_tuple_count((ss)->primary_tupstore) + \
 	 ((ss)->replica_tupstore != NULL ? tuplestore_tuple_count((ss)->replica_tupstore) : 0))
 
 static void
-data_node_state_init(DataNodeState *ss, DataNodeDispatchState *sds, TSConnectionId id)
-{
+data_node_state_init(DataNodeState *ss, DataNodeDispatchState *sds, TSConnectionId id) {
 	MemoryContext old = MemoryContextSwitchTo(sds->mcxt);
 
 	memset(ss, 0, sizeof(DataNodeState));
@@ -252,8 +246,7 @@ data_node_state_init(DataNodeState *ss, DataNodeDispatchState *sds, TSConnection
 }
 
 static DataNodeState *
-data_node_state_get_or_create(DataNodeDispatchState *sds, TSConnectionId id)
-{
+data_node_state_get_or_create(DataNodeDispatchState *sds, TSConnectionId id) {
 	DataNodeState *ss;
 	bool found;
 
@@ -266,16 +259,14 @@ data_node_state_get_or_create(DataNodeDispatchState *sds, TSConnectionId id)
 }
 
 static void
-data_node_state_clear_primary_store(DataNodeState *ss)
-{
+data_node_state_clear_primary_store(DataNodeState *ss) {
 	tuplestore_clear(ss->primary_tupstore);
 	Assert(tuplestore_tuple_count(ss->primary_tupstore) == 0);
 	ss->next_tuple = 0;
 }
 
 static void
-data_node_state_clear_replica_store(DataNodeState *ss)
-{
+data_node_state_clear_replica_store(DataNodeState *ss) {
 	if (NULL == ss->replica_tupstore)
 		return;
 
@@ -284,8 +275,7 @@ data_node_state_clear_replica_store(DataNodeState *ss)
 }
 
 static void
-data_node_state_close(DataNodeState *ss)
-{
+data_node_state_close(DataNodeState *ss) {
 	if (NULL != ss->pstmt)
 		prepared_stmt_close(ss->pstmt);
 
@@ -296,8 +286,7 @@ data_node_state_close(DataNodeState *ss)
 }
 
 static void
-data_node_dispatch_begin(CustomScanState *node, EState *estate, int eflags)
-{
+data_node_dispatch_begin(CustomScanState *node, EState *estate, int eflags) {
 	DataNodeDispatchState *sds = (DataNodeDispatchState *) node;
 	CustomScan *cscan = castNode(CustomScan, node->ss.ps.plan);
 #if PG14_LT
@@ -363,8 +352,7 @@ data_node_dispatch_begin(CustomScanState *node, EState *estate, int eflags)
  * Store the result of a RETURNING clause.
  */
 static void
-store_returning_result(DataNodeDispatchState *sds, int row, TupleTableSlot *slot, PGresult *res)
-{
+store_returning_result(DataNodeDispatchState *sds, int row, TupleTableSlot *slot, PGresult *res) {
 	PG_TRY();
 	{
 		HeapTuple newtup = tuplefactory_make_tuple(sds->tupfactory, res, row, PQbinaryTuples(res));
@@ -384,16 +372,18 @@ store_returning_result(DataNodeDispatchState *sds, int row, TupleTableSlot *slot
 }
 
 static const char *state_names[] = {
-	[SD_READ] = "READ",			  [SD_FLUSH] = "FLUSH", [SD_LAST_FLUSH] = "LAST_FLUSH",
-	[SD_RETURNING] = "RETURNING", [SD_DONE] = "DONE",
+	[SD_READ] = "READ",
+	[SD_FLUSH] = "FLUSH",
+	[SD_LAST_FLUSH] = "LAST_FLUSH",
+	[SD_RETURNING] = "RETURNING",
+	[SD_DONE] = "DONE",
 };
 
 /*
  * Move the state machine to a new state.
  */
 static void
-data_node_dispatch_set_state(DataNodeDispatchState *sds, DispatchState new_state)
-{
+data_node_dispatch_set_state(DataNodeDispatchState *sds, DispatchState new_state) {
 	Assert(sds->state != new_state);
 
 	elog(DEBUG2,
@@ -403,8 +393,7 @@ data_node_dispatch_set_state(DataNodeDispatchState *sds, DispatchState new_state
 
 #ifdef USE_ASSERT_CHECKING
 
-	switch (new_state)
-	{
+	switch (new_state) {
 		case SD_READ:
 			Assert(sds->state == SD_RETURNING);
 			break;
@@ -426,8 +415,7 @@ data_node_dispatch_set_state(DataNodeDispatchState *sds, DispatchState new_state
 }
 
 static PreparedStmt *
-prepare_data_node_insert_stmt(DataNodeDispatchState *sds, TSConnection *conn, int total_params)
-{
+prepare_data_node_insert_stmt(DataNodeDispatchState *sds, TSConnection *conn, int total_params) {
 	AsyncRequest *req;
 	PreparedStmt *stmt;
 	MemoryContext oldcontext = MemoryContextSwitchTo(sds->mcxt);
@@ -454,8 +442,7 @@ prepare_data_node_insert_stmt(DataNodeDispatchState *sds, TSConnection *conn, in
  * store.
  */
 static AsyncRequest *
-send_batch_to_data_node(DataNodeDispatchState *sds, DataNodeState *ss)
-{
+send_batch_to_data_node(DataNodeDispatchState *sds, DataNodeState *ss) {
 	TupleTableSlot *slot = sds->batch_slot;
 	AsyncRequest *req;
 	const char *sql_stmt;
@@ -468,20 +455,17 @@ send_batch_to_data_node(DataNodeDispatchState *sds, DataNodeState *ss)
 	ss->num_tuples_sent = 0;
 
 	while (
-		tuplestore_gettupleslot(ss->primary_tupstore, true /* forward */, false /* copy */, slot))
-	{
+		tuplestore_gettupleslot(ss->primary_tupstore, true /* forward */, false /* copy */, slot)) {
 		/* get following parameters from slot */
 		stmt_params_convert_values(sds->stmt_params, slot, NULL);
 		ss->num_tuples_sent++;
 	}
 
-	if (NULL != ss->replica_tupstore)
-	{
+	if (NULL != ss->replica_tupstore) {
 		while (tuplestore_gettupleslot(ss->replica_tupstore,
 									   true /* forward */,
 									   false /* copy */,
-									   slot))
-		{
+									   slot)) {
 			/* get following parameters from slot */
 			stmt_params_convert_values(sds->stmt_params, slot, NULL);
 			ss->num_tuples_sent++;
@@ -497,8 +481,7 @@ send_batch_to_data_node(DataNodeDispatchState *sds, DataNodeState *ss)
 		response_type = FORMAT_BINARY;
 
 	/* Send tuples */
-	switch (sds->state)
-	{
+	switch (sds->state) {
 		case SD_FLUSH:
 			/* Lazy initialize the prepared statement */
 			if (NULL == ss->pstmt)
@@ -558,14 +541,12 @@ send_batch_to_data_node(DataNodeDispatchState *sds, DataNodeState *ss)
  * 2. State is SD_LAST_FLUSH and there are tuples to send.
  */
 static bool
-should_flush_data_node(DataNodeDispatchState *sds, DataNodeState *ss)
-{
+should_flush_data_node(DataNodeDispatchState *sds, DataNodeState *ss) {
 	int64 num_tuples = NUM_STORED_TUPLES(ss);
 
 	Assert(sds->state == SD_FLUSH || sds->state == SD_LAST_FLUSH);
 
-	if (sds->state == SD_FLUSH)
-	{
+	if (sds->state == SD_FLUSH) {
 		if (num_tuples >= sds->flush_threshold)
 			return true;
 		return false;
@@ -578,8 +559,7 @@ should_flush_data_node(DataNodeDispatchState *sds, DataNodeState *ss)
  * Flush the tuples of data nodes that have a full batch.
  */
 static AsyncRequestSet *
-flush_data_nodes(DataNodeDispatchState *sds)
-{
+flush_data_nodes(DataNodeDispatchState *sds) {
 	AsyncRequestSet *reqset = NULL;
 	DataNodeState *ss;
 	HASH_SEQ_STATUS hseq;
@@ -588,14 +568,11 @@ flush_data_nodes(DataNodeDispatchState *sds)
 
 	hash_seq_init(&hseq, sds->nodestates);
 
-	for (ss = hash_seq_search(&hseq); ss != NULL; ss = hash_seq_search(&hseq))
-	{
-		if (should_flush_data_node(sds, ss))
-		{
+	for (ss = hash_seq_search(&hseq); ss != NULL; ss = hash_seq_search(&hseq)) {
+		if (should_flush_data_node(sds, ss)) {
 			AsyncRequest *req = send_batch_to_data_node(sds, ss);
 
-			if (NULL != req)
-			{
+			if (NULL != req) {
 				if (NULL == reqset)
 					reqset = async_request_set_create();
 
@@ -613,22 +590,19 @@ flush_data_nodes(DataNodeDispatchState *sds)
  * In case of RETURNING, return a list of responses, otherwise NIL.
  */
 static List *
-await_all_responses(DataNodeDispatchState *sds, AsyncRequestSet *reqset)
-{
+await_all_responses(DataNodeDispatchState *sds, AsyncRequestSet *reqset) {
 	AsyncResponseResult *rsp;
 	List *results = NIL;
 
 	sds->next_tuple = 0;
 
-	while ((rsp = async_request_set_wait_any_result(reqset)))
-	{
+	while ((rsp = async_request_set_wait_any_result(reqset))) {
 		DataNodeState *ss = async_response_result_get_user_data(rsp);
 		PGresult *res = async_response_result_get_pg_result(rsp);
 		ExecStatusType status = PQresultStatus(res);
 		bool report_error = true;
 
-		switch (status)
-		{
+		switch (status) {
 			case PGRES_TUPLES_OK:
 				if (!HAS_RETURNING(sds))
 					break;
@@ -677,33 +651,29 @@ await_all_responses(DataNodeDispatchState *sds, AsyncRequestSet *reqset)
  *
  * Return the number of tuples read.
  */
-static int64
-handle_read(DataNodeDispatchState *sds)
-{
-	PlanState *substate = linitial(sds->cstate.custom_ps);
+static int64 handle_read(DataNodeDispatchState *dataNodeDispatchState) {
+	PlanState *substate = linitial(dataNodeDispatchState->cstate.custom_ps);
 	ChunkDispatchState *cds = (ChunkDispatchState *) substate;
-	EState *estate = sds->cstate.ss.ps.state;
+	EState *estate = dataNodeDispatchState->cstate.ss.ps.state;
 #if PG14_LT
 	ResultRelInfo *rri_saved = estate->es_result_relation_info;
 #endif
 	int64 num_tuples_read = 0;
 
-	Assert(sds->state == SD_READ);
+	Assert(dataNodeDispatchState->state == SD_READ);
 
 	/* If we are reading new tuples, we either do it for the first batch or we
 	 * finished a previous batch. In either case, reset the batch memory
 	 * context so that we release the memory after each batch is finished. */
-	MemoryContextReset(sds->batch_mcxt);
+	MemoryContextReset(dataNodeDispatchState->batch_mcxt);
 
 	/* Read tuples from the subnode until flush */
-	while (sds->state == SD_READ)
-	{
+	while (dataNodeDispatchState->state == SD_READ) {
 		TupleTableSlot *slot = ExecProcNode(substate);
 
 		if (TupIsNull(slot))
-			data_node_dispatch_set_state(sds, SD_LAST_FLUSH);
-		else
-		{
+			data_node_dispatch_set_state(dataNodeDispatchState, SD_LAST_FLUSH);
+		else {
 			/* The previous node should have routed the tuple to the right
 			 * chunk and set the corresponding result relation. The FdwState
 			 * should also point to the chunk's insert state. */
@@ -733,11 +703,10 @@ handle_read(DataNodeDispatchState *sds)
 			/* Total count */
 			num_tuples_read++;
 
-			foreach (lc, cis->chunk_data_nodes)
-			{
+			foreach (lc, cis->chunk_data_nodes) {
 				ChunkDataNode *cdn = lfirst(lc);
 				TSConnectionId id = remote_connection_id(cdn->foreign_server_oid, cis->user_id);
-				DataNodeState *ss = data_node_state_get_or_create(sds, id);
+				DataNodeState *ss = data_node_state_get_or_create(dataNodeDispatchState, id);
 
 				/* This will store one copy of the tuple per data node, which is
 				 * a bit inefficient. Note that we put the tuple in the
@@ -751,8 +720,8 @@ handle_read(DataNodeDispatchState *sds)
 
 				/* Once one data node has reached the batch size, we stop
 				 * reading. */
-				if (sds->state != SD_FLUSH && NUM_STORED_TUPLES(ss) >= sds->flush_threshold)
-					data_node_dispatch_set_state(sds, SD_FLUSH);
+				if (dataNodeDispatchState->state != SD_FLUSH && NUM_STORED_TUPLES(ss) >= dataNodeDispatchState->flush_threshold)
+					data_node_dispatch_set_state(dataNodeDispatchState, SD_FLUSH);
 
 				primary_data_node = false;
 			}
@@ -778,8 +747,7 @@ handle_read(DataNodeDispatchState *sds)
  * interleaving different tasks would also complicate the state machine.
  */
 static void
-handle_flush(DataNodeDispatchState *sds)
-{
+handle_flush(DataNodeDispatchState *sds) {
 	MemoryContext oldcontext;
 	AsyncRequestSet *reqset;
 
@@ -792,8 +760,7 @@ handle_flush(DataNodeDispatchState *sds)
 	oldcontext = MemoryContextSwitchTo(sds->batch_mcxt);
 	reqset = flush_data_nodes(sds);
 
-	if (NULL != reqset)
-	{
+	if (NULL != reqset) {
 		sds->responses = await_all_responses(sds, reqset);
 		pfree(reqset);
 	}
@@ -806,8 +773,7 @@ handle_flush(DataNodeDispatchState *sds)
  * Get a tuple when there's a RETURNING clause.
  */
 static TupleTableSlot *
-get_returning_tuple(DataNodeDispatchState *sds)
-{
+get_returning_tuple(DataNodeDispatchState *sds) {
 	ChunkDispatchState *cds = (ChunkDispatchState *) linitial(sds->cstate.custom_ps);
 	ResultRelInfo *rri = cds->rri;
 	TupleTableSlot *res_slot = sds->batch_slot;
@@ -823,16 +789,12 @@ get_returning_tuple(DataNodeDispatchState *sds)
 	 * dummy tuple.  (has_returning is false when the local query is of the
 	 * form "UPDATE/DELETE .. RETURNING 1" for example.)
 	 */
-	if (!HAS_RETURNING(sds))
-	{
+	if (!HAS_RETURNING(sds)) {
 		Assert(NIL == sds->responses);
 		ExecStoreAllNullTuple(slot);
 		res_slot = slot;
-	}
-	else
-	{
-		while (NIL != sds->responses)
-		{
+	} else {
+		while (NIL != sds->responses) {
 			AsyncResponseResult *rsp = linitial(sds->responses);
 			DataNodeState *ss = async_response_result_get_user_data(rsp);
 			PGresult *res = async_response_result_get_pg_result(rsp);
@@ -840,8 +802,7 @@ get_returning_tuple(DataNodeDispatchState *sds)
 			bool last_tuple;
 			bool got_tuple = false;
 
-			if (num_tuples_to_return > 0)
-			{
+			if (num_tuples_to_return > 0) {
 				MemoryContext oldcontext;
 
 				last_tuple = (ss->next_tuple + 1) == num_tuples_to_return;
@@ -864,12 +825,10 @@ get_returning_tuple(DataNodeDispatchState *sds)
 				Assert(got_tuple);
 				Assert(!TupIsNull(res_slot));
 				ss->next_tuple++;
-			}
-			else
+			} else
 				last_tuple = true;
 
-			if (last_tuple)
-			{
+			if (last_tuple) {
 				sds->responses = list_delete_first(sds->responses);
 				async_response_result_close(rsp);
 				data_node_state_clear_primary_store(ss);
@@ -890,8 +849,7 @@ get_returning_tuple(DataNodeDispatchState *sds)
  * clause. Otherwise, return an empty slot.
  */
 static TupleTableSlot *
-handle_returning(DataNodeDispatchState *sds)
-{
+handle_returning(DataNodeDispatchState *sds) {
 	EState *estate = sds->cstate.ss.ps.state;
 	ChunkDispatchState *cds = (ChunkDispatchState *) linitial(sds->cstate.custom_ps);
 	ResultRelInfo *rri = cds->rri;
@@ -906,8 +864,7 @@ handle_returning(DataNodeDispatchState *sds)
 	 * When all chunks are pruned rri will be NULL and there is nothing to do.
 	 * Without returning projection, nothing to do here either.
 	 */
-	if (!rri || !rri->ri_projectReturning)
-	{
+	if (!rri || !rri->ri_projectReturning) {
 		Assert(!HAS_RETURNING(sds));
 		Assert(NIL == sds->responses);
 		done = true;
@@ -920,8 +877,7 @@ handle_returning(DataNodeDispatchState *sds)
 	if (sds->next_tuple >= sds->num_tuples)
 		done = true;
 
-	if (done)
-	{
+	if (done) {
 		sds->next_tuple = 0;
 		sds->num_tuples = 0;
 
@@ -931,9 +887,7 @@ handle_returning(DataNodeDispatchState *sds)
 			data_node_dispatch_set_state(sds, SD_DONE);
 		else
 			data_node_dispatch_set_state(sds, SD_READ);
-	}
-	else
-	{
+	} else {
 		slot = get_returning_tuple(sds);
 		Assert(!TupIsNull(slot));
 		sds->next_tuple++;
@@ -957,8 +911,7 @@ handle_returning(DataNodeDispatchState *sds)
  * NULL tuple.
  */
 static TupleTableSlot *
-data_node_dispatch_exec(CustomScanState *node)
-{
+data_node_dispatch_exec(CustomScanState *node) {
 	DataNodeDispatchState *sds = (DataNodeDispatchState *) node;
 	TupleTableSlot *slot = NULL;
 	bool done = false;
@@ -970,10 +923,8 @@ data_node_dispatch_exec(CustomScanState *node)
 
 	/* Read tuples and flush until there's either something to return or no
 	 * more tuples to read */
-	while (!done)
-	{
-		switch (sds->state)
-		{
+	while (!done) {
+		switch (sds->state) {
 			case SD_READ:
 				handle_read(sds);
 				break;
@@ -1005,16 +956,14 @@ data_node_dispatch_exec(CustomScanState *node)
 }
 
 static void
-data_node_dispatch_rescan(CustomScanState *node)
-{
+data_node_dispatch_rescan(CustomScanState *node) {
 	/* Cannot rescan and start from the beginning since we might already have
 	 * sent data to remote nodes */
 	elog(ERROR, "cannot restart inserts to remote nodes");
 }
 
 static void
-data_node_dispatch_end(CustomScanState *node)
-{
+data_node_dispatch_end(CustomScanState *node) {
 	DataNodeDispatchState *sds = (DataNodeDispatchState *) node;
 	DataNodeState *ss;
 	HASH_SEQ_STATUS hseq;
@@ -1030,8 +979,7 @@ data_node_dispatch_end(CustomScanState *node)
 }
 
 static void
-data_node_dispatch_explain(CustomScanState *node, List *ancestors, ExplainState *es)
-{
+data_node_dispatch_explain(CustomScanState *node, List *ancestors, ExplainState *es) {
 	DataNodeDispatchState *sds = (DataNodeDispatchState *) node;
 
 	ExplainPropertyInteger("Batch size", NULL, sds->flush_threshold, es);
@@ -1039,8 +987,7 @@ data_node_dispatch_explain(CustomScanState *node, List *ancestors, ExplainState 
 	/*
 	 * Add remote query, when VERBOSE option is specified.
 	 */
-	if (es->verbose)
-	{
+	if (es->verbose) {
 		const char *explain_sql =
 			deparsed_insert_stmt_get_sql_explain(&sds->stmt, sds->flush_threshold);
 
@@ -1059,8 +1006,7 @@ static CustomExecMethods data_node_dispatch_state_methods = {
 
 /* Only allocate the custom scan state. Initialize in the begin handler. */
 static Node *
-data_node_dispatch_state_create(CustomScan *cscan)
-{
+data_node_dispatch_state_create(CustomScan *cscan) {
 	DataNodeDispatchState *sds;
 
 	sds = (DataNodeDispatchState *) newNode(sizeof(DataNodeDispatchState), T_CustomScanState);
@@ -1075,14 +1021,12 @@ static CustomScanMethods data_node_dispatch_plan_methods = {
 };
 
 static List *
-get_insert_attrs(Relation rel)
-{
+get_insert_attrs(Relation rel) {
 	TupleDesc tupdesc = RelationGetDescr(rel);
 	List *attrs = NIL;
 	int i;
 
-	for (i = 0; i < tupdesc->natts; i++)
-	{
+	for (i = 0; i < tupdesc->natts; i++) {
 		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
 
 		if (attr->attisdropped || attr->attgenerated != '\0')
@@ -1104,8 +1048,7 @@ get_insert_attrs(Relation rel)
  * statement.
  */
 static List *
-plan_remote_insert(PlannerInfo *root, DataNodeDispatchPath *sdpath)
-{
+plan_remote_insert(PlannerInfo *root, DataNodeDispatchPath *sdpath) {
 	ModifyTablePath *mtpath = sdpath->mtpath;
 	OnConflictAction onconflict =
 		mtpath->onconflict == NULL ? ONCONFLICT_NONE : mtpath->onconflict->action;
@@ -1179,8 +1122,7 @@ plan_remote_insert(PlannerInfo *root, DataNodeDispatchPath *sdpath)
 
 static Plan *
 data_node_dispatch_plan_create(PlannerInfo *root, RelOptInfo *rel, struct CustomPath *best_path,
-							   List *tlist, List *clauses, List *custom_plans)
-{
+							   List *tlist, List *clauses, List *custom_plans) {
 	DataNodeDispatchPath *sdpath = (DataNodeDispatchPath *) best_path;
 	CustomScan *cscan = makeNode(CustomScan);
 	Plan *subplan;
@@ -1205,8 +1147,7 @@ static CustomPathMethods data_node_dispatch_path_methods = {
 
 Path *
 data_node_dispatch_path_create(PlannerInfo *root, ModifyTablePath *mtpath, Index hypertable_rti,
-							   int subplan_index)
-{
+							   int subplan_index) {
 	DataNodeDispatchPath *sdpath = palloc0(sizeof(DataNodeDispatchPath));
 	Path *subpath = ts_chunk_dispatch_path_create(root, mtpath, hypertable_rti, subplan_index);
 

@@ -34,7 +34,7 @@ typedef struct TSCopyMultiInsertBuffer TSCopyMultiInsertBuffer;
 
 typedef struct ChunkInsertState {
 	Relation rel; // 对应的chunk的表
-	ResultRelInfo *result_relation_info;
+	ResultRelInfo *result_relation_info; // 指向chunk的resultRelInfo
 
 	/* Per-chunk arbiter indexes for ON CONFLICT handling */
 	List *arbiter_indexes;
