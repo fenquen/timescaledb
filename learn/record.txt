@@ -104,23 +104,23 @@ TupleTableSlot *ExecProcNode(PlanState *planState)
                                                 .ReScanCustomScan = chunk_dispatch_rescan,
                                             };
 
-                                    static CustomPathMethods hypertable_modify_path_methods = {
-                                        .CustomName = "HypertableModifyPath",
-                                        .PlanCustomPath = hypertable_modify_plan_create, // 注入 hypertable_modify_plan_methods
-                                    };
+                                static CustomPathMethods hypertable_modify_path_methods = {
+                                    .CustomName = "HypertableModifyPath",
+                                    .PlanCustomPath = hypertable_modify_plan_create, // 注入 hypertable_modify_plan_methods
+                                };
 
-                                          static CustomScanMethods hypertable_modify_plan_methods = {
-                                              .CustomName = "HypertableModify",
-                                              .CreateCustomScanState = hypertable_modify_state_create, // 注入 hypertable_modify_state_methods
+                                      static CustomScanMethods hypertable_modify_plan_methods = {
+                                          .CustomName = "HypertableModify",
+                                          .CreateCustomScanState = hypertable_modify_state_create, // 注入 hypertable_modify_state_methods
+                                      };
+
+                                          static CustomExecMethods hypertable_modify_state_methods = {
+                                              .CustomName = "HypertableModifyState",
+                                              .BeginCustomScan = hypertable_modify_begin,
+                                              .EndCustomScan = hypertable_modify_end,
+                                              .ExecCustomScan = hypertable_modify_exec,
+                                              .ReScanCustomScan = hypertable_modify_rescan,
+                                              .ExplainCustomScan = hypertable_modify_explain,
                                           };
-
-                                              static CustomExecMethods hypertable_modify_state_methods = {
-                                                  .CustomName = "HypertableModifyState",
-                                                  .BeginCustomScan = hypertable_modify_begin,
-                                                  .EndCustomScan = hypertable_modify_end,
-                                                  .ExecCustomScan = hypertable_modify_exec,
-                                                  .ReScanCustomScan = hypertable_modify_rescan,
-                                                  .ExplainCustomScan = hypertable_modify_explain,
-                                              };
 
 
