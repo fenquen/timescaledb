@@ -1238,19 +1238,19 @@ involves_hypertable(PlannerInfo *root, RelOptInfo *rel) {
  *		  ^
  *		  | Tuple
  *		  |
- *	  [ subplan ]
+ *	  [ 名是result的plan ]
  *
  * For PG < 14, the modify table plan is modified for INSERT only.
  * For PG14+, we modify the plan for DELETE as well.
  *
  */
 static List *replace_hypertable_modify_paths(PlannerInfo *root,
-											 List *subPathList,
+											 List *outputRelOptInfoPathList,
 											 RelOptInfo *input_rel) {
 	List *newPathlist = NIL;
 	ListCell *lc;
 
-	foreach (lc, subPathList) {
+	foreach (lc, outputRelOptInfoPathList) {
 		Path *subPath = lfirst(lc);
 
 		if (IsA(subPath, ModifyTablePath)) { // 找到这些subpath中的modifyTablePath

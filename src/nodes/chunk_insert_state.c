@@ -75,7 +75,7 @@ static inline void create_chunk_rri_constraint_expr(ResultRelInfo *resultRelInfo
  */
 static inline ResultRelInfo *create_chunk_result_relation_info(ChunkDispatch *chunkDispatch,
 															   Relation chunkTable) {
-	ResultRelInfo *resultRelInfoOrigin = chunkDispatch->hypertable_result_rel_info;
+	ResultRelInfo *resultRelInfoOrigin = chunkDispatch->hypertable_result_rel_info; // 原来的落地到hypertable的
 
 	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
 	InitResultRelInfo(resultRelInfo,
@@ -596,30 +596,30 @@ extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk,
 	MemoryContextSwitchTo(chunkInsertStateMemoryCtx);
 
 	// 实现了对hypertable对应的原始表写入的自动转移 移到了对应chunk上
-	ResultRelInfo *relinfo = create_chunk_result_relation_info(chunkDispatch, chunkTable);
+	ResultRelInfo *resultRelInfoOnChunkTable = create_chunk_result_relation_info(chunkDispatch, chunkTable);
 
-	ResultRelInfo *resrelinfo;
+	ResultRelInfo *resultRelInfo;
 	if (!hasCompressedChunk) {
-		resrelinfo = relinfo;
+		resultRelInfo = resultRelInfoOnChunkTable;
 	} else { // insert the tuple into the compressed chunk instead
-		resrelinfo = create_compress_chunk_result_relation_info(chunkDispatch, chunkTableCompress);
+		resultRelInfo = create_compress_chunk_result_relation_info(chunkDispatch, chunkTableCompress);
 	}
 
-	CheckValidResultRel(resrelinfo, ts_chunk_dispatch_get_cmd_type(chunkDispatch));
+	CheckValidResultRel(resultRelInfo, ts_chunk_dispatch_get_cmd_type(chunkDispatch));
 
 	ChunkInsertState *chunkInsertState = palloc0(sizeof(ChunkInsertState));
 	chunkInsertState->mctx = chunkInsertStateMemoryCtx;
 	chunkInsertState->rel = chunkTable;
-	chunkInsertState->result_relation_info = resrelinfo;
+	chunkInsertState->result_relation_info = resultRelInfo;
 	chunkInsertState->estate = chunkDispatch->estate;
 
-	if (resrelinfo->ri_RelationDesc->rd_rel->relhasindex &&
-		resrelinfo->ri_IndexRelationDescs == NULL) {
-		ExecOpenIndices(resrelinfo, onConflictAction != ONCONFLICT_NONE);
+	if (resultRelInfo->ri_RelationDesc->rd_rel->relhasindex &&
+		resultRelInfo->ri_IndexRelationDescs == NULL) {
+		ExecOpenIndices(resultRelInfo, onConflictAction != ONCONFLICT_NONE);
 	}
 
-	if (relinfo->ri_TrigDesc != NULL) {
-		TriggerDesc *trigDesc = relinfo->ri_TrigDesc;
+	if (resultRelInfoOnChunkTable->ri_TrigDesc != NULL) {
+		TriggerDesc *trigDesc = resultRelInfoOnChunkTable->ri_TrigDesc;
 
 		/* instead of triggers can only be created on VIEWs */
 		Assert(!trigDesc->trig_insert_instead_row);
@@ -674,19 +674,19 @@ extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk,
 	}
 
 	// hypertable对应的本表
-	Relation originalTable = table_open(chunkDispatch->hypertable->main_table_relid, AccessShareLock);
+	Relation originalHyperTable = table_open(chunkDispatch->hypertable->main_table_relid, AccessShareLock);
 
 	/* Set tuple conversion map, if tuple needs conversion. We don't want to
 	 * convert tuples going into foreign tables since these are actually sent to
 	 * data nodes for insert on that node's local hypertable. */
 	if (chunk->relkind != RELKIND_FOREIGN_TABLE) {
-		chunkInsertState->hyper_to_chunk_map = convert_tuples_by_name_compat(originalTable->rd_att,
+		chunkInsertState->hyper_to_chunk_map = convert_tuples_by_name_compat(originalHyperTable->rd_att,
 																			 chunkTable->rd_att,
 																			 gettext_noop("could not convert row type"));
 	}
 
-	// relinfo->ri_RootToPartitionMap = chunkInsertState->hyper_to_chunk_map;
-	// relinfo->ri_PartitionTupleSlot = table_slot_create(relinfo->ri_RelationDesc,
+	// resultRelInfoOnChunkTable->ri_RootToPartitionMap = chunkInsertState->hyper_to_chunk_map;
+	// resultRelInfoOnChunkTable->ri_PartitionTupleSlot = table_slot_create(resultRelInfoOnChunkTable->ri_RelationDesc,
 	// &chunkInsertState->estate->es_tupleTable);
 
 	adjust_projections(chunkInsertState,
@@ -705,7 +705,7 @@ extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk,
 
 		// need a way to convert from chunk tuple to compressed chunk tuple
 		compress_info->compress_state = ts_cm_functions->compress_row_init(htid, chunkTable, chunkTableCompress);
-		compress_info->orig_result_relation_info = relinfo;
+		compress_info->orig_result_relation_info = resultRelInfoOnChunkTable;
 
 		// we found a cagg trigger earlier
 		if (cagg_trig_nargs > 0) {
@@ -727,15 +727,15 @@ extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk,
 	 * chunkInsertState. Otherwise, memory might blow up when there are many chunks being
 	 * inserted into. This also means that the slot needs to be destroyed with
 	 * the chunk insert chunkInsertState. */
-	chunkInsertState->slot = MakeSingleTupleTableSlot(relinfo->ri_RelationDesc->rd_att,
-													  table_slot_callbacks(relinfo->ri_RelationDesc));
+	chunkInsertState->slot = MakeSingleTupleTableSlot(resultRelInfoOnChunkTable->ri_RelationDesc->rd_att,
+													  table_slot_callbacks(resultRelInfoOnChunkTable->ri_RelationDesc));
 
-	table_close(originalTable, AccessShareLock);
+	table_close(originalHyperTable, AccessShareLock);
 
 	chunkInsertState->chunk_id = chunk->fd.id;
 
 	if (chunk->relkind == RELKIND_FOREIGN_TABLE) {
-		RangeTblEntry *rte = rt_fetch(resrelinfo->ri_RangeTableIndex, chunkDispatch->estate->es_range_table);
+		RangeTblEntry *rte = rt_fetch(resultRelInfo->ri_RangeTableIndex, chunkDispatch->estate->es_range_table);
 
 		Assert(rte != NULL);
 
@@ -748,10 +748,10 @@ extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk,
 		 * the FDW. Instead exploit the FdwPrivate pointer to pass on the
 		 * chunk insert chunkInsertState to DataNodeDispatch so that it knows which data nodes
 		 * to insert into. */
-		resrelinfo->ri_FdwState = chunkInsertState;
-	} else if (resrelinfo->ri_FdwRoutine &&
-			   !resrelinfo->ri_usesFdwDirectModify &&
-			   resrelinfo->ri_FdwRoutine->BeginForeignModify) {
+		resultRelInfo->ri_FdwState = chunkInsertState;
+	} else if (resultRelInfo->ri_FdwRoutine &&
+			   !resultRelInfo->ri_usesFdwDirectModify &&
+			   resultRelInfo->ri_FdwRoutine->BeginForeignModify) {
 		/*
 		 * If this is a chunk located one or more data nodes, setup the
 		 * foreign data wrapper chunkInsertState for the chunk. The private fdw data was
@@ -774,8 +774,8 @@ extern ChunkInsertState *ts_chunk_insert_state_create(const Chunk *chunk,
 		 * tsl/src/fdw/timescaledb_fdw.c).
 		 */
 		fdwprivate = lappend(list_copy(fdwprivate), chunkInsertState);
-		resrelinfo->ri_FdwRoutine->BeginForeignModify(mtstate,
-													  resrelinfo,
+		resultRelInfo->ri_FdwRoutine->BeginForeignModify(mtstate,
+														 resultRelInfo,
 													  fdwprivate,
 													  0,
 													  chunkDispatch->eflags);

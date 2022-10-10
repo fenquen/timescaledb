@@ -262,7 +262,9 @@ static Node *hypertable_modify_state_create(CustomScan *customScan) {
 	ModifyTable *modifyTable = castNode(ModifyTable, linitial(customScan->custom_plans));
 
 	HypertableModifyState *hyperTableModifyState = (HypertableModifyState *) newNode(sizeof(HypertableModifyState), T_CustomScanState);
+
 	hyperTableModifyState->cscan_state.methods = &hypertable_modify_state_methods;
+
 	hyperTableModifyState->mt = modifyTable;
 	hyperTableModifyState->mt->arbiterIndexes = linitial(customScan->custom_private);
 
@@ -336,7 +338,7 @@ plan_remote_modify(PlannerInfo *root, HypertableModifyPath *hmpath, ModifyTable 
 	ListCell *lc;
 	int i = 0;
 
-	/* Iterate all subplans / result relations to check which ones are inserts
+	/* 遍历 modifyTable的全部 subplans / result relations to check which ones are inserts
 	 * into hypertables. In case we find a remote hypertable insert, we either
 	 * have to plan it using the FDW or, in case of data node dispatching, we
 	 * just need to mark the plan as "direct" to let ModifyTable know it
@@ -424,31 +426,31 @@ ts_replace_rowid_vars(PlannerInfo *root, List *tlist, int varno) {
 #endif
 
 static Plan *hypertable_modify_plan_create(PlannerInfo *root,
-										   RelOptInfo *rel,
-										   CustomPath *best_path, // hyperTableModifyPath
-										   List *tlist,
-										   List *clauses,
-										   List *custom_plans) {
-	HypertableModifyPath *hypertableModifyPath = (HypertableModifyPath *) best_path;
+										   RelOptInfo *relOptInfo,
+										   CustomPath *customPath, // hyperTableModifyPath
+										   List *targetEntryList,
+										   List *restrictInfoList,
+										   List *subPlanList) { // hyperTableModifyPath对应的全部小弟path已经转换成了plan
+	HypertableModifyPath *hypertableModifyPath = (HypertableModifyPath *) customPath;
+
+	// 原来的顶头的modifyTable现在成为了小弟
+	ModifyTable *modifyTable = linitial_node(ModifyTable, subPlanList);
+
 	CustomScan *customPlan = makeNode(CustomScan);
-	ModifyTable *modifyTable = linitial_node(ModifyTable, custom_plans);
-	FdwRoutine *fdwroutine = NULL;
-
 	customPlan->methods = &hypertable_modify_plan_methods;
-	customPlan->custom_plans = custom_plans;
+	customPlan->custom_plans = subPlanList;
 	customPlan->scan.scanrelid = 0;
-
-	/* Copy costs, etc., from the original plan */
+	// copy costs from the original plan
 	customPlan->scan.plan.startup_cost = modifyTable->plan.startup_cost;
 	customPlan->scan.plan.total_cost = modifyTable->plan.total_cost;
 	customPlan->scan.plan.plan_rows = modifyTable->plan.plan_rows;
 	customPlan->scan.plan.plan_width = modifyTable->plan.plan_width;
 
+	FdwRoutine *fdwRoutine = NULL;
 	if (NIL != hypertableModifyPath->serveroids) {
-		/* Get the foreign data wrapper routines for the first data node. Should be the same for all data nodes. */
+		// get the foreign data wrapper routines for the first data node. Should be the same for all data nodes
 		Oid serverid = linitial_oid(hypertableModifyPath->serveroids);
-
-		fdwroutine = GetFdwRoutineByServerId(serverid);
+		fdwRoutine = GetFdwRoutineByServerId(serverid);
 	}
 
 	/*
@@ -461,11 +463,11 @@ static Plan *hypertable_modify_plan_create(PlannerInfo *root,
 	 * e.g., a deparsed INSERT statement that references the hypertable
 	 * instead of a chunk.
 	 */
-	plan_remote_modify(root, hypertableModifyPath, modifyTable, fdwroutine);
+	plan_remote_modify(root, hypertableModifyPath, modifyTable, fdwRoutine);
 
-	/* The tlist is always NIL since the ModifyTable subplan doesn't have its
+	/* The targetEntryList is always NIL since the ModifyTable subplan doesn't have its
 	 * targetlist set until set_plan_references (setrefs.c) is run */
-	Assert(tlist == NIL);
+	Assert(targetEntryList == NIL);
 
 	/* Target list handling here needs special attention. Intuitively, we'd like
 	 * to adopt the target list of the ModifyTable subplan we wrap without
@@ -541,9 +543,9 @@ static CustomPathMethods hypertable_modify_path_methods = {
 };
 
 Path *ts_hypertable_modify_path_create(PlannerInfo *root,
-									   ModifyTablePath *modifyTablePath,
+									   ModifyTablePath *modifyTablePath, // 原始的用来insert的
 									   Hypertable *hypertable,
-									   RelOptInfo *rel) {
+									   RelOptInfo *relOptInfo) {
 	Cache *hcache = ts_hypertable_cache_pin();
 	Bitmapset *distributed_insert_plans = NULL;
 
@@ -551,7 +553,7 @@ Path *ts_hypertable_modify_path_create(PlannerInfo *root,
 	/* Since it's theoretically possible for ModifyTablePath to have multiple subpaths
 	 * in PG < 14 we assert that we only get 1 subPath here. */
 	Assert(list_length(modifyTablePath->subpaths) == list_length(modifyTablePath->resultRelations));
-	if (list_length(modifyTablePath->subpaths) > 1) {
+	if (list_length(modifyTablePath->subpaths) > 1) { // 不允许sub的数量要比1大
 		/* This should never happen but if it ever does it's safer to
 		 * error here as the rest of the code assumes there is only 1 subPath.*/
 		elog(ERROR, "multiple top-level subpaths found during INSERT");
@@ -588,15 +590,15 @@ Path *ts_hypertable_modify_path_create(PlannerInfo *root,
 			distributed_insert_plans = bms_add_member(distributed_insert_plans, i);
 			subPath = ts_cm_functions->distributed_insert_path_create(root, modifyTablePath, rti, i);
 		} else {
-			subPath = ts_chunk_dispatch_path_create(root, modifyTablePath, rti, i);
+			subPath = ts_chunk_dispatch_path_create(root, modifyTablePath, rti, i); // 得到的是chunkDispatchPath 且 chunkDispatchPath -> modifyTable的首个小弟
 		}
 	}
 
 	HypertableModifyPath *hypertableModifyPath = palloc0(sizeof(HypertableModifyPath));
 
-	Path *path = &modifyTablePath->path;
+	Path *path = &modifyTablePath->path; // 篡夺原来的
 
-	/* Copy costs, etc. */
+	// copy cost
 	memcpy(&hypertableModifyPath->cpath.path, path, sizeof(Path));
 	hypertableModifyPath->cpath.path.type = T_CustomPath;
 	hypertableModifyPath->cpath.path.pathtype = T_CustomScan;

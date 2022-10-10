@@ -48,17 +48,18 @@ static CustomScanMethods chunk_dispatch_plan_methods = {
  * them up to the ModifyTable node.
  */
 static Plan *chunk_dispatch_plan_create(PlannerInfo *root,
-										RelOptInfo *relopt,
-										CustomPath *best_path,
-										List *tlist,
-										List *clauses,
-										List *custom_plans) {
-	ChunkDispatchPath *chunkDispatchPath = (ChunkDispatchPath *) best_path;
-	CustomScan *customScan = makeNode(CustomScan);
-	ListCell *lc;
+										RelOptInfo *relOptInfo,
+										CustomPath *customPath,
+										List *targetEntryList,
+										List *restrictInfoList,
+										List *subPlanList) {
+	ChunkDispatchPath *chunkDispatchPath = (ChunkDispatchPath *) customPath;
 
-	foreach (lc, custom_plans) {
-		Plan *subplan = lfirst(lc);
+	CustomScan *customScan = makeNode(CustomScan);
+
+	ListCell *lc;
+	foreach (lc, subPlanList) {
+		Plan *subplan = lfirst(lc);// 应该是 modifyTableSubPath 对应的 plan
 		customScan->scan.plan.startup_cost += subplan->startup_cost;
 		customScan->scan.plan.total_cost += subplan->total_cost;
 		customScan->scan.plan.plan_rows += subplan->plan_rows;
@@ -67,12 +68,12 @@ static Plan *chunk_dispatch_plan_create(PlannerInfo *root,
 
 	customScan->custom_private = list_make1_oid(chunkDispatchPath->hypertable_relid);
 	customScan->methods = &chunk_dispatch_plan_methods;
-	customScan->custom_plans = custom_plans;
+	customScan->custom_plans = subPlanList;
 	customScan->scan.scanrelid = 0; /* Indicate this is not a real relation we are scanning */
 
 	/* The "input" and "output" target lists should be the same */
-	customScan->custom_scan_tlist = tlist;
-	customScan->scan.plan.targetlist = tlist;
+	customScan->custom_scan_tlist = targetEntryList;
+	customScan->scan.plan.targetlist = targetEntryList;
 
 	return &customScan->scan.plan;
 }
@@ -86,23 +87,23 @@ static CustomPathMethods chunk_dispatch_path_methods = {
 Path *ts_chunk_dispatch_path_create(PlannerInfo *root,
 									ModifyTablePath *modifyTablePath,
 									Index hypertable_rti,
-									int subpath_index) {
+									int subPathIndex) {
 	ChunkDispatchPath *chunkDispatchPath = (ChunkDispatchPath *) palloc0(sizeof(ChunkDispatchPath));
 
 #if PG14_LT
-	Path *subPath = list_nth(modifyTablePath->subpaths, subpath_index); // chunkDispatch
+	Path *modifyTableSubPath = list_nth(modifyTablePath->subpaths, subPathIndex);
 #else
-	Path *subPath = modifyTablePath->subPath;
+	Path *modifyTableSubPath = modifyTablePath->modifyTableSubPath;
 #endif
 
 	RangeTblEntry *rangeTableEntry = planner_rt_fetch(hypertable_rti, root); // 对应目标表
 
-	memcpy(&chunkDispatchPath->cpath.path, subPath, sizeof(Path));
+	memcpy(&chunkDispatchPath->cpath.path, modifyTableSubPath, sizeof(Path));
 	chunkDispatchPath->cpath.path.type = T_CustomPath;
 	chunkDispatchPath->cpath.path.pathtype = T_CustomScan;
 
 	chunkDispatchPath->cpath.methods = &chunk_dispatch_path_methods;
-	chunkDispatchPath->cpath.custom_paths = list_make1(subPath);
+	chunkDispatchPath->cpath.custom_paths = list_make1(modifyTableSubPath); // chunkDispatchPath -> modifyTableSubPath
 
 	chunkDispatchPath->mtpath = modifyTablePath;
 	chunkDispatchPath->hypertable_rti = hypertable_rti;

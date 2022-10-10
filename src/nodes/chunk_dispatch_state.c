@@ -69,7 +69,7 @@ static TupleTableSlot *chunk_dispatch_exec(CustomScanState *customScanState) {
 	EState *estate = customScanState->ss.ps.state;
 
 	/* get the next tuple from the sub plan chunkDispatchState customScanState */
-	// 到了这里便是执行了最小弟的那个了 原来的insert小弟 对应 insert 中的 要insert的数据 便是单行的data
+	// 到了这里便是执行了最小弟的那个了 原来的insert(modifyTable)小弟(result) 对应 insert 中的 要insert的数据 便是单行的data
 	TupleTableSlot *tupleTableSlot = ExecProcNode(childPlanState);
 
 	if (TupIsNull(tupleTableSlot)) {
@@ -123,14 +123,14 @@ static TupleTableSlot *chunk_dispatch_exec(CustomScanState *customScanState) {
 	MemoryContextSwitchTo(old);
 
 	/* Convert the tuple to the chunk's row type, if necessary */
-	// 把原来的要insert的值迁移
+	// 把原来的要insert的值迁移到chunkInsertState->slot
 	if (chunkInsertState->hyper_to_chunk_map != NULL) {
 		tupleTableSlot = execute_attr_map_slot(chunkInsertState->hyper_to_chunk_map->attrMap,
 											   tupleTableSlot,
 											   chunkInsertState->slot);
 	}
 
-	if (chunkInsertState->compress_info != NULL) {
+	if (chunkInsertState->compress_info != NULL) { // 用到压缩
 		/*
 		 * When the chunk is compressed, we redirect the insert to the internal compressed
 		 * chunk. However, any BEFORE ROW triggers defined on the chunk have to be executed

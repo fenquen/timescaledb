@@ -15,7 +15,7 @@
 
 typedef struct ChunkDispatchPath {
 	CustomPath cpath;
-	ModifyTablePath *mtpath;
+	ModifyTablePath *mtpath; // 对应的原始的modifyTablePath
 	Index hypertable_rti;
 	Oid hypertable_relid; // 应该是原表的oid
 } ChunkDispatchPath;
@@ -23,6 +23,6 @@ typedef struct ChunkDispatchPath {
 extern TSDLLEXPORT Path *ts_chunk_dispatch_path_create(PlannerInfo *root,
 													   ModifyTablePath *modifyTablePath,
 													   Index hypertable_rti,
-													   int subpath_index);
+													   int subPathIndex);
 
 #endif /* TIMESCALEDB_CHUNK_DISPATCH_PLAN_H */
